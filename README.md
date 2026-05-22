@@ -128,7 +128,7 @@ To execute all defined benchmarks, simply run:
 
 ```swift package benchmark```
 
-Please see the [documentation](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/runningbenchmarks) for more detail on all options.
+Please see the [documentation](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/runningbenchmarks) for more detail on all options.
 
 ### Sample output benchmark run
 <img width="1005" alt="image" src="https://user-images.githubusercontent.com/8501048/225311258-1247f8e9-c1fd-4598-a4b8-2b41a9b9a8e7.png">
@@ -174,7 +174,7 @@ We've found that focusing on percentiles rather than average or standard deviati
 Percentiles allows for a consistent way of expressing benchmark results of both throughput and latency measurements (which typically do **not** have a standardized distribution, being almost always multi-modal in nature).
 This multi-modal nature of the latency measurements leads to the common statistical measures of mean and standard deviation being potentially misleading.
 
-Please see the [documentation for further details on percentiles](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/aboutpercentiles).
+Please see the [documentation for further details on percentiles](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/aboutpercentiles).
 
 ## API and file format stability
 The API will be deemed stable as of `1.0.0` and follows semantical versioning for future releases. 
