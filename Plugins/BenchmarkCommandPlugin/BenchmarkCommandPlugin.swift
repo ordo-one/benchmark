@@ -175,12 +175,43 @@ import PackagePlugin
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
 
+        // Resolve which identifier this consumer actually has the benchmark package under,
+        // so generated boilerplate matches what SPM sees (depends on whether they pinned
+        // the old "package-benchmark" URL or the new "benchmark" URL).
+        let resolvedBenchmarkPackageIdentifier: String = {
+            if packageBenchmarkIdentifiers.contains(context.package.id) {
+                return context.package.id
+            }
+            if let dep = context.package.dependencies.first(where: {
+                packageBenchmarkIdentifiers.contains($0.package.id)
+            }) {
+                return dep.package.id
+            }
+            return "benchmark"
+        }()
+
+        if resolvedBenchmarkPackageIdentifier == "package-benchmark" {
+            print("")
+            print("\u{001B}[33mWarning: this project depends on the benchmark package using its legacy")
+            print("identifier 'package-benchmark'. The repository has been renamed; please update")
+            print("your Package.swift to use the new URL and identifier:")
+            print("")
+            print("  .package(url: \"https://github.com/ordo-one/benchmark\", ...)")
+            print("  .product(name: \"Benchmark\", package: \"benchmark\"),")
+            print("  .plugin(name: \"BenchmarkPlugin\", package: \"benchmark\"),")
+            print("")
+            print("Support for the legacy 'package-benchmark' identifier will be removed in a")
+            print("future release.\u{001B}[0m")
+            print("")
+        }
+
         var args: [String] = [
             benchmarkToolName,
             "--command", commandToPerform.rawValue,
             "--baseline-storage-path", context.package.directory.string,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
+            "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
         ]
 
         metricsToUse.forEach { metric in
