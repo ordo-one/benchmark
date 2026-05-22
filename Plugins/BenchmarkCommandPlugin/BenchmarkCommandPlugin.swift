@@ -109,7 +109,7 @@ import PackagePlugin
             print("")
             print(help)
             print("")
-            print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+            print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
             print("")
             exit(0)
         }
@@ -169,9 +169,41 @@ import PackagePlugin
         let swiftSourceModuleTargets: [SwiftSourceModuleTarget]
         var shouldBuildTargets = true // We don't rebuild the targets when we dont need to execute them, e.g. baseline read/compare
 
-        let packageBenchmarkIdentifier = "package-benchmark"
+        // Accept both the new ("benchmark") and the legacy ("package-benchmark") package
+        // identifiers so consumers that still pin via the old GitHub URL continue to work.
+        let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
+
+        // Resolve which identifier this consumer actually has the benchmark package under,
+        // so generated boilerplate matches what SPM sees (depends on whether they pinned
+        // the old "package-benchmark" URL or the new "benchmark" URL).
+        let resolvedBenchmarkPackageIdentifier: String = {
+            if packageBenchmarkIdentifiers.contains(context.package.id) {
+                return context.package.id
+            }
+            if let dep = context.package.dependencies.first(where: {
+                packageBenchmarkIdentifiers.contains($0.package.id)
+            }) {
+                return dep.package.id
+            }
+            return "benchmark"
+        }()
+
+        if resolvedBenchmarkPackageIdentifier == "package-benchmark" {
+            print("")
+            print("\u{001B}[33mWarning: this project depends on the benchmark package using its legacy")
+            print("identifier 'package-benchmark'. The repository has been renamed; please update")
+            print("your Package.swift to use the new URL and identifier:")
+            print("")
+            print("  .package(url: \"https://github.com/ordo-one/benchmark\", ...)")
+            print("  .product(name: \"Benchmark\", package: \"benchmark\"),")
+            print("  .plugin(name: \"BenchmarkPlugin\", package: \"benchmark\"),")
+            print("")
+            print("Support for the legacy 'package-benchmark' identifier will be removed in a")
+            print("future release.\u{001B}[0m")
+            print("")
+        }
 
         var args: [String] = [
             benchmarkToolName,
@@ -179,6 +211,7 @@ import PackagePlugin
             "--baseline-storage-path", context.package.directory.string,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
+            "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
         ]
 
         metricsToUse.forEach { metric in
@@ -267,7 +300,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -315,7 +348,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -371,15 +404,15 @@ import PackagePlugin
         }
 
         let benchmarkToolModuleTargets: [SwiftSourceModuleTarget]
-        if context.package.id == packageBenchmarkIdentifier {
+        if packageBenchmarkIdentifiers.contains(context.package.id) {
             benchmarkToolModuleTargets = context.package.targets(ofType: SwiftSourceModuleTarget.self)
         } else {
             guard
                 let benchmarkPackage = context.package.dependencies.first(where: {
-                    $0.package.id == packageBenchmarkIdentifier
+                    packageBenchmarkIdentifiers.contains($0.package.id)
                 })
             else {
-                print("Benchmark failed to find the package-benchmark module.")
+                print("Benchmark failed to find the benchmark module.")
                 throw MyError.buildFailed
             }
             benchmarkToolModuleTargets = benchmarkPackage.package.targets(ofType: SwiftSourceModuleTarget.self)
@@ -512,7 +545,7 @@ import PackagePlugin
             #if os(Linux) && compiler(>=6.3)
             if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                 writeToStderr(
-                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/package-benchmark/issues/349\u{001B}[0m\n"
+                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
                 )
             }
 

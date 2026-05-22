@@ -36,11 +36,11 @@ extension BenchmarkTool {
                 .executableTarget(
                     name: "\(targetName)",
                     dependencies: [
-                        .product(name: "Benchmark", package: "package-benchmark"),
+                        .product(name: "Benchmark", package: "\(benchmarkPackageIdentifier)"),
                     ],
                     path: "Benchmarks/\(targetName)",
                     plugins: [
-                        .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+                        .plugin(name: "BenchmarkPlugin", package: "\(benchmarkPackageIdentifier)")
                     ]
                 ),
             ]

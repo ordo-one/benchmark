@@ -67,6 +67,9 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "The name of the new benchmark target to create")
     var targetName: String?
 
+    @Option(name: .long, help: "The SPM package identifier under which the benchmark package is depended on (used by `benchmark init`)")
+    var benchmarkPackageIdentifier: String = "benchmark"
+
     @Option(name: .long, help: "The operation to perform on the specified baselines")
     var baselineOperation: BaselineOperation?
 
