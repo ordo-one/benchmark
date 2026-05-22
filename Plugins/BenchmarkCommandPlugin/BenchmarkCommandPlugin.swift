@@ -169,7 +169,9 @@ import PackagePlugin
         let swiftSourceModuleTargets: [SwiftSourceModuleTarget]
         var shouldBuildTargets = true // We don't rebuild the targets when we dont need to execute them, e.g. baseline read/compare
 
-        let packageBenchmarkIdentifier = "benchmark"
+        // Accept both the new ("benchmark") and the legacy ("package-benchmark") package
+        // identifiers so consumers that still pin via the old GitHub URL continue to work.
+        let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
 
@@ -371,12 +373,12 @@ import PackagePlugin
         }
 
         let benchmarkToolModuleTargets: [SwiftSourceModuleTarget]
-        if context.package.id == packageBenchmarkIdentifier {
+        if packageBenchmarkIdentifiers.contains(context.package.id) {
             benchmarkToolModuleTargets = context.package.targets(ofType: SwiftSourceModuleTarget.self)
         } else {
             guard
                 let benchmarkPackage = context.package.dependencies.first(where: {
-                    $0.package.id == packageBenchmarkIdentifier
+                    packageBenchmarkIdentifiers.contains($0.package.id)
                 })
             else {
                 print("Benchmark failed to find the benchmark module.")
