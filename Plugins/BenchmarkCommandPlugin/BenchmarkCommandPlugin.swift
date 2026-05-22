@@ -109,7 +109,7 @@ import PackagePlugin
             print("")
             print(help)
             print("")
-            print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+            print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
             print("")
             exit(0)
         }
@@ -169,7 +169,7 @@ import PackagePlugin
         let swiftSourceModuleTargets: [SwiftSourceModuleTarget]
         var shouldBuildTargets = true // We don't rebuild the targets when we dont need to execute them, e.g. baseline read/compare
 
-        let packageBenchmarkIdentifier = "package-benchmark"
+        let packageBenchmarkIdentifier = "benchmark"
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
 
@@ -267,7 +267,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -315,7 +315,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -379,7 +379,7 @@ import PackagePlugin
                     $0.package.id == packageBenchmarkIdentifier
                 })
             else {
-                print("Benchmark failed to find the package-benchmark module.")
+                print("Benchmark failed to find the benchmark module.")
                 throw MyError.buildFailed
             }
             benchmarkToolModuleTargets = benchmarkPackage.package.targets(ofType: SwiftSourceModuleTarget.self)
@@ -512,7 +512,7 @@ import PackagePlugin
             #if os(Linux) && compiler(>=6.3)
             if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                 writeToStderr(
-                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/package-benchmark/issues/349\u{001B}[0m\n"
+                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
                 )
             }
 

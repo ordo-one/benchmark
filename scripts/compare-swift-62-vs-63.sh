@@ -23,7 +23,7 @@ BENCHMARKS_DIR="${REPO_ROOT}/Benchmarks"
 
 SWIFT62_BIN="${SWIFT62_BIN:-/usr/local/share/toolchains/6.2.4/usr/bin/swift}"
 SWIFT63_BIN="${SWIFT63_BIN:-/usr/local/share/toolchains/6.3.1/usr/bin/swift}"
-OUTPUT_DIR="${OUTPUT_DIR:-/tmp/package-benchmark-compare}"
+OUTPUT_DIR="${OUTPUT_DIR:-/tmp/benchmark-compare}"
 
 mkdir -p "${OUTPUT_DIR}"
 

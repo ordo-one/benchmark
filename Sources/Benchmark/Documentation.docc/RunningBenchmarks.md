@@ -144,7 +144,7 @@ E.g. for the target `BenchmarkDateTime`, you can run it manually with
 
 There are some additional options too that can be displayed with `--help`:
 ```
-hassila@max ~/G/package-benchmark (various-fixes)> .build/arm64-apple-macosx/release/BenchmarkDateTime --help
+hassila@max ~/G/benchmark (various-fixes)> .build/arm64-apple-macosx/release/BenchmarkDateTime --help
 USAGE: benchmark-runner [--quiet <quiet>] [--input-fd <input-fd>] [--output-fd <output-fd>] [--filter <filter> ...] [--skip <skip> ...] [--check-absolute]
 
 OPTIONS:
@@ -179,10 +179,10 @@ a backtrace for a bug report. E.g:
 > swift package benchmark --debug
 ...
 To debug, start BenchmarkTool in LLDB using:
-lldb /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/debug/BenchmarkTool
+lldb /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/debug/BenchmarkTool
 
 Then launch BenchmarkTool with:
-run --command run --baseline-storage-path /Users/hassila/GitHub/package-benchmark --format text --grouping benchmark --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/HistogramBenchmark --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/BenchmarkDateTime --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/Basic
+run --command run --baseline-storage-path /Users/hassila/GitHub/benchmark --format text --grouping benchmark --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/HistogramBenchmark --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/BenchmarkDateTime --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/Basic
 ```
 
 
