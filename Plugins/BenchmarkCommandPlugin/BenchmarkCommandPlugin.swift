@@ -74,6 +74,7 @@ import Musl
         let timeUnits = argumentExtractor.extractOption(named: "time-units")
         let benchmarkBuildConfiguration = argumentExtractor.extractOption(named: "benchmark-build-configuration")
         let debug = argumentExtractor.extractFlag(named: "debug")
+        let debugBuild = argumentExtractor.extractFlag(named: "debug-build")
         let scale = argumentExtractor.extractFlag(named: "scale")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
@@ -408,13 +409,15 @@ import Musl
             print("Benchmark failed to find the BenchmarkTool target.")
             throw MyError.buildFailed
         }
+        let buildConfiguration: PackageManager.BuildConfiguration = debugBuild > 0 ? .debug : .release
         if outputFormat == .text {
             if quietRunning == 0 {
-                print("Building \(benchmarkToolModule.name) in release mode...")
+                let modeString = debugBuild > 0 ? "debug" : "release"
+                print("Building \(benchmarkToolModule.name) in \(modeString) mode...")
             }
         }
 
-        var buildParameters = PackageManager.BuildParameters(configuration: .release)
+        var buildParameters = PackageManager.BuildParameters(configuration: buildConfiguration)
 
         buildParameters.otherSwiftcFlags.append(contentsOf: otherSwiftFlagsSpecified.map { "-\($0)" })
 
