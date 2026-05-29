@@ -86,11 +86,11 @@ package.targets += [
     .executableTarget(
         name: "MallocInterposerBenchmarks",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark")
+            .product(name: "Benchmark", package: "benchmark")
         ],
         path: "Benchmarks/MallocInterposer",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
