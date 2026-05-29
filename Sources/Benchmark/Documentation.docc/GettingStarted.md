@@ -30,10 +30,10 @@ swift test --disable-default-traits
 swift package --disable-default-traits benchmark
 ```
 
-If you depend on `package-benchmark` in your own package and want to disable jemalloc, you can opt out of the trait in your `Package.swift`:
+If you depend on `benchmark` in your own package and want to disable jemalloc, you can opt out of the trait in your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/ordo-one/package-benchmark.git", from: "...", traits: [])
+.package(url: "https://github.com/ordo-one/benchmark.git", from: "...", traits: [])
 ```
 
 #### Disabling jemalloc (Swift 5.x legacy)
@@ -85,7 +85,7 @@ echo /usr/local/lib > /etc/ld.so.conf.d/local_lib.conf && ldconfig
 To add the dependency on Benchmark, add a dependency to your package:
 
 ```swift
-.package(url: "https://github.com/ordo-one/package-benchmark", .upToNextMajor(from: "1.0.0")),
+.package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.0.0")),
 ```
 
 ### Add benchmark exectuable targets using `benchmark init`
@@ -116,7 +116,7 @@ The source for all benchmarks *must reside in a directory named `Benchmarks`* in
 
 The benchmark plugin uses this directory combined with the executable target information to automatically discover and run your benchmarks.
 
-For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from `package-benchmark`.
+For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from `benchmark`.
 
 The following example shows an benchmark suite named `My-Benchmark` with the required dependency on `Benchmark` and the source files for the benchmark that reside in the directory `Benchmarks/My-Benchmark`:
 
@@ -124,8 +124,8 @@ The following example shows an benchmark suite named `My-Benchmark` with the req
 .executableTarget(
     name: "My-Benchmark",
     dependencies: [
-        .product(name: "Benchmark", package: "package-benchmark"),
-        .product(name: "BenchmarkPlugin", package: "package-benchmark"),
+        .product(name: "Benchmark", package: "benchmark"),
+        .product(name: "BenchmarkPlugin", package: "benchmark"),
     ],
     path: "Benchmarks/My-Benchmark"
 ),

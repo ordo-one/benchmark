@@ -25,12 +25,12 @@ package.targets += [
     .executableTarget(
         name: "BenchmarkDateTime",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark"),
+            .product(name: "Benchmark", package: "benchmark"),
             .product(name: "DateTime", package: "package-datetime"),
         ],
         path: "Benchmarks/DateTime",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -40,11 +40,11 @@ package.targets += [
     .executableTarget(
         name: "Basic",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark")
+            .product(name: "Benchmark", package: "benchmark")
         ],
         path: "Benchmarks/Basic",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -54,12 +54,12 @@ package.targets += [
     .executableTarget(
         name: "HistogramBenchmark",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark"),
+            .product(name: "Benchmark", package: "benchmark"),
             .product(name: "Histogram", package: "hdrhistogram-swift"),
         ],
         path: "Benchmarks/Histogram",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -69,11 +69,11 @@ package.targets += [
     .executableTarget(
         name: "P90AbsoluteThresholdsBenchmark",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark")
+            .product(name: "Benchmark", package: "benchmark")
         ],
         path: "Benchmarks/P90AbsoluteThresholds",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]

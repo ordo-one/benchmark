@@ -1,26 +1,26 @@
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fordo-one%2Fpackage-benchmark%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/ordo-one/package-benchmark)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fordo-one%2Fpackage-benchmark%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/ordo-one/package-benchmark)
-[![codecov](https://codecov.io/gh/ordo-one/package-benchmark/branch/main/graph/badge.svg?token=hXHmhEG1iF)](https://codecov.io/gh/ordo-one/package-benchmark)<br>
-[![Swift address sanitizer](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-sanitizer-address.yml/badge.svg)](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-sanitizer-address.yml)
-[![Swift thread sanitizer](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-sanitizer-thread.yml/badge.svg)](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-sanitizer-thread.yml)
-[![Swift Linux build](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-linux-build.yml/badge.svg)](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-linux-build.yml)
-[![Swift macOS build](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-macos-build.yml/badge.svg)](https://github.com/ordo-one/package-benchmark/actions/workflows/swift-macos-build.yml)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fordo-one%2Fbenchmark%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/ordo-one/benchmark)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fordo-one%2Fbenchmark%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/ordo-one/benchmark)
+[![codecov](https://codecov.io/gh/ordo-one/benchmark/branch/main/graph/badge.svg?token=hXHmhEG1iF)](https://codecov.io/gh/ordo-one/benchmark)<br>
+[![Swift address sanitizer](https://github.com/ordo-one/benchmark/actions/workflows/swift-sanitizer-address.yml/badge.svg)](https://github.com/ordo-one/benchmark/actions/workflows/swift-sanitizer-address.yml)
+[![Swift thread sanitizer](https://github.com/ordo-one/benchmark/actions/workflows/swift-sanitizer-thread.yml/badge.svg)](https://github.com/ordo-one/benchmark/actions/workflows/swift-sanitizer-thread.yml)
+[![Swift Linux build](https://github.com/ordo-one/benchmark/actions/workflows/swift-linux-build.yml/badge.svg)](https://github.com/ordo-one/benchmark/actions/workflows/swift-linux-build.yml)
+[![Swift macOS build](https://github.com/ordo-one/benchmark/actions/workflows/swift-macos-build.yml/badge.svg)](https://github.com/ordo-one/benchmark/actions/workflows/swift-macos-build.yml)
 
 # Benchmark 
 
 The Benchmark package allows you to easily create sophisticated Swift performance benchmarks for a wide variety of metrics.
 
-This README provides a quick overview of the Benchmark package. For more detailed information, please [see the documentation](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark).
+This README provides a quick overview of the Benchmark package. For more detailed information, please [see the documentation](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark).
 
 ## Overview
 
-Performance is a key feature for many apps and frameworks. Benchmark helps make it easy to measure and track [many different metrics](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/metrics) that affects performance, such as CPU usage, ARC traffic, memory/malloc usage and use of operating system resources such as threads and system calls, as well as completely custom metric counters.
+Performance is a key feature for many apps and frameworks. Benchmark helps make it easy to measure and track [many different metrics](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/metrics) that affects performance, such as CPU usage, ARC traffic, memory/malloc usage and use of operating system resources such as threads and system calls, as well as completely custom metric counters.
 
 Benchmark works on both macOS and Linux and supports several key workflows for performance measurements:
 
-* **[Automated Pull Request performance regression checks](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/comparingbenchmarksci)** by comparing the performance metrics of a pull request with the main branch and having the PR workflow check fail if there is a regression according to absolute or relative threshold tolerances specified per benchmark
-* **[Manual comparison of multiple performance baselines](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/creatingandcomparingbaselines)** for iterative or A/B performance work by an individual developer
-* **[Export of benchmark results in several formats](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/exportingbenchmarks)** for analysis or visualization
+* **[Automated Pull Request performance regression checks](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/comparingbenchmarksci)** by comparing the performance metrics of a pull request with the main branch and having the PR workflow check fail if there is a regression according to absolute or relative threshold tolerances specified per benchmark
+* **[Manual comparison of multiple performance baselines](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/creatingandcomparingbaselines)** for iterative or A/B performance work by an individual developer
+* **[Export of benchmark results in several formats](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/exportingbenchmarks)** for analysis or visualization
 
 Benchmark provides a quick way for measuring and validating of performance metrics, while other more specialized tools such as Instruments, DTrace, Heaptrack, Leaks, Sample and more can be used for attributing performance problems or for finding root causes for any deviations found.
 
@@ -28,7 +28,7 @@ Benchmark is suitable for both smaller ad-hoc benchmarks focusing on execution t
 
 ## Documentation
 
-Documentation on how to use Benchmark in your Swift package can be [viewed online](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark) or inside Xcode using `Build Documentation`. 
+Documentation on how to use Benchmark in your Swift package can be [viewed online](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark) or inside Xcode using `Build Documentation`. 
 
 Additionally the command plugin provides help information if you run `swift package benchmark help` from the command line.
 
@@ -44,7 +44,7 @@ The steps in some detail:
 ### Step 1: Add a package dependency to Package.swift
 To add the dependency on Benchmark, add the dependency to your package:
 ```swift
-.package(url: "https://github.com/ordo-one/package-benchmark", .upToNextMajor(from: "1.4.0")),
+.package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.4.0")),
 ```
 
 ### Step 2: Add benchmark exectuable targets using `benchmark init`
@@ -70,23 +70,23 @@ Alternatively if you don't want the plugin to modify your project directory, you
 Create an executable target in Package.swift for each benchmark suite you want to measure.
 The source for all benchmarks must reside in a directory named `Benchmarks` in the root of your swift package.
 The benchmark plugin uses this directory combined with the executable target information to automatically discover and run your benchmarks.
-For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from package-benchmark.
+For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from the benchmark package.
 The following example shows an benchmark suite named `My-Benchmark` with the required dependency on `Benchmark` and the source files for the benchmark that reside in the directory `Benchmarks/My-Benchmark`:
 ```swift
 .executableTarget(
       name: "My-Benchmark",
       dependencies: [
-          .product(name: "Benchmark", package: "package-benchmark"),
+          .product(name: "Benchmark", package: "benchmark"),
       ],
       path: "Benchmarks/My-Benchmark",
       plugins: [
-          .plugin(name: "BenchmarkPlugin", package: "package-benchmark"),
+          .plugin(name: "BenchmarkPlugin", package: "benchmark"),
       ]
 ),
 ```
 
 ## Step 3: Writing benchmarks
-There are [documentation available](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/writingbenchmarks) as well as a [a sample project](https://github.com/ordo-one/package-benchmark-samples) using various aspects of this package in practice.
+There are [documentation available](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/writingbenchmarks) as well as a [a sample project](https://github.com/ordo-one/benchmark-samples) using various aspects of this package in practice.
 
 ## Sample benchmark code
 ```swift
@@ -128,7 +128,7 @@ To execute all defined benchmarks, simply run:
 
 ```swift package benchmark```
 
-Please see the [documentation](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/runningbenchmarks) for more detail on all options.
+Please see the [documentation](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/runningbenchmarks) for more detail on all options.
 
 ### Sample output benchmark run
 <img width="1005" alt="image" src="https://user-images.githubusercontent.com/8501048/225311258-1247f8e9-c1fd-4598-a4b8-2b41a9b9a8e7.png">
@@ -174,7 +174,7 @@ We've found that focusing on percentiles rather than average or standard deviati
 Percentiles allows for a consistent way of expressing benchmark results of both throughput and latency measurements (which typically do **not** have a standardized distribution, being almost always multi-modal in nature).
 This multi-modal nature of the latency measurements leads to the common statistical measures of mean and standard deviation being potentially misleading.
 
-Please see the [documentation for further details on percentiles](https://swiftpackageindex.com/ordo-one/package-benchmark/documentation/benchmark/aboutpercentiles).
+Please see the [documentation for further details on percentiles](https://swiftpackageindex.com/ordo-one/benchmark/documentation/benchmark/aboutpercentiles).
 
 ## API and file format stability
 The API will be deemed stable as of `1.0.0` and follows semantical versioning for future releases. 
