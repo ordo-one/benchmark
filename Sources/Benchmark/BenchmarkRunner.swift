@@ -217,7 +217,22 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
                             try suppressor.suppressOutput()
                         }
 
-                        results = benchmarkExecutor.run(benchmark)
+                        // Run the measurement loop on the benchmark's desired actor isolation, if any.
+                        // An `@isolated(any)` async closure carries its isolation (e.g. `@MainActor`);
+                        // unisolated and synchronous benchmarks yield `nil` and run on the generic executor.
+                        //
+                        // (Note: read `.isolation` off an unwrapped closure rather than via optional chaining,
+                        //        as the latter currently crashes the Swift compiler -
+                        //        https://github.com/swiftlang/swift/issues/89584).
+                        let isolation: (any Actor)?
+
+                        if let asyncClosure = benchmark.asyncClosure {
+                            isolation = asyncClosure.isolation
+                        } else {
+                            isolation = nil
+                        }
+
+                        results = await benchmarkExecutor.run(benchmark, isolation: isolation)
 
                         if quiet {
                             try suppressor.restoreOutput()
