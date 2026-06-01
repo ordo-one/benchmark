@@ -47,82 +47,106 @@ DYLD_INTERPOSE(replacement_posix_memalign, posix_memalign)
 
 #else  /* Linux */
 
+// On Linux we resolve the real libc functions via dlsym(RTLD_NEXT, …) and
+// cache the function pointers. The wrinkle: dlsym itself can call calloc
+// internally during symbol resolution, which would recurse back into our
+// hooks. We guard against that with a thread-local "in dlsym" flag and a
+// small static bootstrap buffer that absorbs any allocations made while
+// resolving.
+//
+// After resolution completes (which happens during the constructor, before
+// the bench's hot loop runs), the steady-state hot path is just:
+//     ldr  x_real_fn
+//     blr  x_real_fn
+// — one load, one indirect call. Same shape as glibc's own PLT stub, so
+// the wrapper-layer cost is just the extra branch.
+
 #define _GNU_SOURCE
 #include <dlfcn.h>
-#include <stdatomic.h>
 #include <string.h>
 
-static _Atomic(void *(*)(size_t))            g_real_malloc;
-static _Atomic(void  (*)(void *))            g_real_free;
-static _Atomic(void *(*)(size_t, size_t))    g_real_calloc;
-static _Atomic(void *(*)(void *, size_t))    g_real_realloc;
+static void *(*real_malloc)(size_t)         = NULL;
+static void  (*real_free)(void *)           = NULL;
+static void *(*real_calloc)(size_t, size_t) = NULL;
+static void *(*real_realloc)(void *, size_t)= NULL;
 
-// Small recursion buffer for the rare case where dlsym itself allocates
-// before we've resolved the real symbols. ~1 MiB is plenty.
-static char         g_bootstrap[1024 * 1024];
-static _Atomic size_t g_bootstrap_off = 0;
-static int          bootstrap_owns(void *p) {
-    return (char *)p >= g_bootstrap &&
-           (char *)p <  g_bootstrap + sizeof(g_bootstrap);
+// TLS guard: set while we're inside dlsym so any reentrant malloc/calloc/
+// realloc/free calls go to the bootstrap path instead of recursing.
+static __thread int g_in_resolve = 0;
+
+// Small static buffer for allocations made during dlsym resolution.
+// 64 KiB is more than enough — dlsym typically allocates only a handful of
+// small objects during the first call.
+static char   g_boot_mem[64 * 1024];
+static size_t g_boot_off = 0;
+
+static int boot_owns(const void *p) {
+    return (const char *)p >= g_boot_mem &&
+           (const char *)p <  g_boot_mem + sizeof(g_boot_mem);
 }
-static void *bootstrap_alloc(size_t n) {
+
+static void *boot_alloc(size_t n) {
     size_t aligned = (n + 15) & ~(size_t)15;
-    size_t off = atomic_fetch_add_explicit(&g_bootstrap_off, aligned,
-                                           memory_order_relaxed);
-    if (off + aligned > sizeof(g_bootstrap)) return NULL;
-    return g_bootstrap + off;
+    if (g_boot_off + aligned > sizeof(g_boot_mem)) return NULL;
+    void *p = g_boot_mem + g_boot_off;
+    g_boot_off += aligned;
+    return p;
 }
 
-#define REAL(_fn) ({                                                          \
-    typeof(g_real_##_fn) _r = atomic_load_explicit(&g_real_##_fn,             \
-                                                   memory_order_relaxed);     \
-    if (!_r) {                                                                \
-        _r = dlsym(RTLD_NEXT, #_fn);                                          \
-        atomic_store_explicit(&g_real_##_fn, _r, memory_order_relaxed);       \
-    }                                                                         \
-    _r;                                                                       \
-})
+static void resolve_real(void) {
+    g_in_resolve = 1;
+    real_malloc  = dlsym(RTLD_NEXT, "malloc");
+    real_free    = dlsym(RTLD_NEXT, "free");
+    real_calloc  = dlsym(RTLD_NEXT, "calloc");
+    real_realloc = dlsym(RTLD_NEXT, "realloc");
+    g_in_resolve = 0;
+}
+
+__attribute__((constructor)) static void preresolve(void) {
+    resolve_real();
+}
 
 void *malloc(size_t s) {
-    typeof(g_real_malloc) r = atomic_load_explicit(&g_real_malloc,
-                                                   memory_order_relaxed);
-    if (!r) {
-        r = dlsym(RTLD_NEXT, "malloc");
-        if (!r) return bootstrap_alloc(s);
-        atomic_store_explicit(&g_real_malloc, r, memory_order_relaxed);
-    }
-    return r(s);
+    if (__builtin_expect(real_malloc != NULL, 1)) return real_malloc(s);
+    if (g_in_resolve) return boot_alloc(s);
+    resolve_real();
+    return real_malloc ? real_malloc(s) : boot_alloc(s);
 }
 
 void free(void *p) {
-    if (!p || bootstrap_owns(p)) return;
-    typeof(g_real_free) r = REAL(free);
-    if (r) r(p);
+    if (!p) return;
+    if (boot_owns(p)) return;       // bootstrap blocks have no underlying chunk
+    if (__builtin_expect(real_free != NULL, 1)) { real_free(p); return; }
+    if (g_in_resolve) return;
+    resolve_real();
+    if (real_free) real_free(p);
 }
 
 void *calloc(size_t n, size_t s) {
-    typeof(g_real_calloc) r = atomic_load_explicit(&g_real_calloc,
-                                                   memory_order_relaxed);
-    if (!r) {
-        r = dlsym(RTLD_NEXT, "calloc");
-        if (!r) {
-            void *p = bootstrap_alloc(n * s);
-            if (p) memset(p, 0, n * s);
-            return p;
-        }
-        atomic_store_explicit(&g_real_calloc, r, memory_order_relaxed);
+    if (__builtin_expect(real_calloc != NULL, 1)) return real_calloc(n, s);
+    if (g_in_resolve) {
+        void *p = boot_alloc(n * s);
+        if (p) memset(p, 0, n * s);
+        return p;
     }
-    return r(n, s);
+    resolve_real();
+    if (real_calloc) return real_calloc(n, s);
+    void *p = boot_alloc(n * s);
+    if (p) memset(p, 0, n * s);
+    return p;
 }
 
 void *realloc(void *p, size_t s) {
-    if (bootstrap_owns(p)) {
-        // Can't realloc a bootstrap allocation in place; copy out.
+    if (boot_owns(p)) {
+        // Can't realloc a bootstrap allocation in place; copy out via malloc.
         void *np = malloc(s);
         if (np && p) memcpy(np, p, s);
         return np;
     }
-    return REAL(realloc)(p, s);
+    if (__builtin_expect(real_realloc != NULL, 1)) return real_realloc(p, s);
+    if (g_in_resolve) return boot_alloc(s);
+    resolve_real();
+    return real_realloc ? real_realloc(p, s) : boot_alloc(s);
 }
 
 #endif
