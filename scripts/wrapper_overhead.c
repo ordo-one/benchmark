@@ -1,17 +1,23 @@
-// wrapper_overhead.c — measure the cost of "being a wrapper" in isolation.
+// wrapper_overhead.c — measure the cost of "being a wrapper" in isolation,
+// and (optionally) the additional cost of the real interposer's bookkeeping.
 //
-// Run the same malloc/free hot loop twice:
+// Run the same malloc/free hot loop two or three times:
 //   1. With nothing preloaded → user code → libc allocator.
 //   2. With wrapper_overhead_passthrough.dylib preloaded → user code → our
 //      one-instruction tail-call wrapper → libc allocator.
+//      Delta from #1 = wrapper layer cost (no bookkeeping at all).
+//   3. (Optional) With the real malloc-interposer preloaded and counting
+//      enabled. Delta from #2 = bookkeeping cost (header + magic check +
+//      enable check + TLS pointer load + counter writes).
 //
-// The wrapper does no bookkeeping at all — its `replacement_malloc` is a
-// single `b _malloc` and `replacement_free` is a single `b _free`. So the
-// delta between the two runs is purely the cost of inserting one extra
-// PLT stub + branch into the call path. Nothing else changes.
+// To enable run #3, set INTERPOSER_DYLIB in the environment to the path of
+// the full interposer dylib/so. The harness will dlsym
+// `malloc_interposer_enable` and call it at startup so counting is on for
+// every measured iteration.
 //
 // Build + drive: see wrapper_overhead.sh in the same directory.
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,6 +67,21 @@ static void measure_pair(const char *name, size_t size) {
 int main(void) {
     const char *label = getenv("BENCH_LABEL");
     if (!label) label = "(no label)";
+
+    // If the real malloc-interposer is preloaded, flip its counting on so we
+    // measure the full bookkeeping cost (header + magic check + enable check
+    // + TLS access + counter writes). dlsym returns NULL for the pass-through
+    // wrapper and for the plain libc run, which is exactly what we want.
+    void (*enable_fn)(void) = (void (*)(void))dlsym(RTLD_DEFAULT,
+                                                    "malloc_interposer_enable");
+    void (*reset_fn)(void)  = (void (*)(void))dlsym(RTLD_DEFAULT,
+                                                    "malloc_interposer_reset");
+    if (enable_fn) {
+        if (reset_fn) reset_fn();
+        enable_fn();
+        fprintf(stderr, "[%s] interposer counting enabled\n", label);
+    }
+
     printf("== %s ==\n", label);
     printf("%-18s %10s %10s %10s\n", "size", "min ns", "median", "max ns");
     printf("%-18s %10s %10s %10s\n", "----", "------", "------", "------");

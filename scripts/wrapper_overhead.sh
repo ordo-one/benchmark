@@ -59,13 +59,37 @@ BENCH_LABEL="plain" "$BUILD_DIR/wrapper_overhead"
 step "Run 2 — pass-through wrapper preloaded ($(basename "$WRAPPER_LIB"))"
 env BENCH_LABEL="wrapped" "${INJECT_ENV[@]}" "$BUILD_DIR/wrapper_overhead"
 
+# --- Run full interposer (optional) ---
+# If the caller points us at the real malloc-interposer dylib, do a third run
+# with counting enabled. Delta from run #2 is the real bookkeeping cost.
+if [[ -n "${INTERPOSER_DYLIB:-}" ]]; then
+    if [[ ! -f "$INTERPOSER_DYLIB" ]]; then
+        fail "INTERPOSER_DYLIB=$INTERPOSER_DYLIB does not exist"
+    fi
+
+    declare -a FULL_INJECT=()
+    case "$(uname -s)" in
+        Darwin)
+            FULL_INJECT+=("DYLD_INSERT_LIBRARIES=$INTERPOSER_DYLIB"
+                          "DYLD_FORCE_FLAT_NAMESPACE=1")
+            ;;
+        Linux)
+            FULL_INJECT+=("LD_PRELOAD=$INTERPOSER_DYLIB")
+            ;;
+    esac
+
+    step "Run 3 — full malloc-interposer preloaded, counting ON"
+    env BENCH_LABEL="full-interposer" "${FULL_INJECT[@]}" "$BUILD_DIR/wrapper_overhead"
+fi
+
 cat <<'EOF'
 
-The delta between the two median columns above is the cost of the wrapper
-layer alone, with zero bookkeeping. On Apple Silicon you'll typically see
-~7–8 ns/pair; on Linux it's smaller because the LD_PRELOAD path goes
-through dlsym once but the per-call dispatch is a direct pointer call.
+Reading the output:
+  delta(plain → wrapped)     = cost of the wrapper layer alone (no logic).
+  delta(wrapped → full)      = cost of header + magic check + enable check
+                               + TLS pointer + counter writes (the
+                               "bookkeeping" on top of the wrapper).
+  delta(plain → full)        = total interposer overhead vs. raw libc.
 
-Anything an interposer wants to do (header bookkeeping, counters, enable
-check, etc.) adds on top of this floor — it does not replace it.
+If only runs 1 and 2 appear, set INTERPOSER_DYLIB=<path> to enable run 3.
 EOF
