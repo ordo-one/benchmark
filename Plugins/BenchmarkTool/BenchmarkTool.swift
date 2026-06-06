@@ -397,9 +397,9 @@ struct BenchmarkTool: AsyncParsableCommand {
         try withCStrings(args) { cArgs in
             var status = posix_spawn(&pid, path.string, nil, nil, cArgs, environ)
 
-            // Close child ends of the pipes
-            try toChild.readEnd.close()
-            try fromChild.writeEnd.close()
+            // Close child ends of the pipes (independently, so a failure closing one still closes the other)
+            try? toChild.readEnd.close()
+            try? fromChild.writeEnd.close()
 
             do {
                 switch benchmarkCommand {
