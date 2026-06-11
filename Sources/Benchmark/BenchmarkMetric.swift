@@ -132,7 +132,7 @@ public extension BenchmarkMetric {
             return true
         case .objectAllocCount, .retainCount, .releaseCount, .retainReleaseDelta:
             return true
-        case let .custom(_, _, useScaleFactor):
+        case .custom(_, _, let useScaleFactor):
             return useScaleFactor
         default:
             return false
@@ -144,7 +144,7 @@ public extension BenchmarkMetric {
         switch self {
         case .throughput:
             return .prefersLarger
-        case let .custom(_, polarity, _):
+        case .custom(_, let polarity, _):
             return polarity
         default:
             return .prefersSmaller
@@ -213,7 +213,7 @@ public extension BenchmarkMetric {
             return "Δ"
         case .deltaPercentage:
             return "Δ %"
-        case let .custom(name, _, _):
+        case .custom(let name, _, _):
             return name
         }
     }
@@ -417,7 +417,7 @@ public extension BenchmarkMetric {
             return "Δ"
         case .deltaPercentage:
             return "Δ %"
-        case let .custom(name, _, _):
+        case .custom(let name, _, _):
             return name
         }
     }
@@ -488,6 +488,18 @@ public extension BenchmarkMetric {
         default:
             self = BenchmarkMetric.custom(argument)
         }
+    }
+}
+
+/// `CodingKeyRepresentable` conformance enables Codable to encode/decode a dictionary with keys of
+/// type `BenchmarkMetric`, as if the key type was `String` and not `BenchmarkMetric`.
+extension BenchmarkMetric: CodingKeyRepresentable {
+    public var codingKey: any CodingKey {
+        self.rawDescription.codingKey
+    }
+
+    public init?<T>(codingKey: T) where T: CodingKey {
+        self.init(argument: codingKey.stringValue)
     }
 }
 

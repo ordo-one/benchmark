@@ -181,7 +181,7 @@ public final class Statistics: Codable {
     }
 
     // Rounds decimals for display
-    public static func roundToDecimalplaces(_ original: Double, _ decimals: Int = 2) -> Double {
+    public static func roundToDecimalPlaces(_ original: Double, _ decimals: Int = 2) -> Double {
         let factor: Double = .pow(10.0, Double(decimals))
         var original: Double = original * factor
         original.round(.toNearestOrEven)

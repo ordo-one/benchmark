@@ -485,7 +485,7 @@ extension BenchmarkBaseline: Equatable {
     public func failsAbsoluteThresholdChecks(
         benchmarks: [Benchmark],
         p90Thresholds: [BenchmarkIdentifier:
-            [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]]
+            [BenchmarkMetric: BenchmarkThreshold]]
     ) -> BenchmarkResult.ThresholdDeviations {
         var allDeviationResults = BenchmarkResult.ThresholdDeviations()
 

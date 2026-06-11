@@ -459,16 +459,43 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
     }
 
     public struct ThresholdDeviation {
+        public enum Deviation {
+            case absolute(comparedTo: Int, difference: Int, tolerance: Int)
+            case relative(comparedTo: Int, differencePercentage: Double, tolerancePercentage: Double)
+            case range(min: Int, max: Int)
+
+            public var isRelative: Bool {
+                switch self {
+                case .relative:
+                    return true
+                default:
+                    return false
+                }
+            }
+
+            public var uxPriority: Int {
+                switch self {
+                case .range:
+                    return 2
+                case .absolute:
+                    return 1
+                case .relative:
+                    return 0
+                }
+            }
+        }
+
         public let name: String
         public let target: String
         public let metric: BenchmarkMetric
         public let percentile: BenchmarkResult.Percentile
         public let baseValue: Int
-        public let comparisonValue: Int
-        public let difference: Int
-        public let differenceThreshold: Int
-        public let relative: Bool
+        public let deviation: Deviation
         public let units: Statistics.Units
+
+        public var uxPriority: Int {
+            return deviation.uxPriority
+        }
     }
 
     public struct ThresholdDeviations {
@@ -490,56 +517,127 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
     func appendDeviationResultsFor(
         _ metric: BenchmarkMetric,
         _ lhs: Int,
-        _ rhs: Int,
+        /// Either absolute values or thresholds from static threshold files.
+        _ rhs: BenchmarkThreshold,
         _ percentile: Self.Percentile,
-        _ thresholds: BenchmarkThresholds,
+        /// Thresholds from 'configuration.thresholds' in the benchmark code.
+        _ thresholdsFromCode: BenchmarkThresholds,
         _ thresholdResults: inout ThresholdDeviations,
         _ name: String = "unknown name",
         _ target: String = "unknown target"
     ) {
         let reverseComparison = metric.polarity == .prefersLarger
-        let absoluteDifference = (reverseComparison ? -1 : 1) * (lhs - rhs)
-        let relativeDifference =
-            (reverseComparison ? 1 : -1) * (rhs != 0 ? (100 - (100.0 * Double(lhs) / Double(rhs))) : 0.0)
+        switch rhs {
+        case .absolute(let rhs):
+            let absoluteDifference = (reverseComparison ? -1 : 1) * (lhs - rhs)
+            let relativeDifference =
+                (reverseComparison ? 1 : -1) * (rhs != 0 ? (100 - (100.0 * Double(lhs) / Double(rhs))) : 0.0)
 
-        if let threshold = thresholds.relative[percentile], !(-threshold...threshold).contains(relativeDifference) {
-            let deviation = ThresholdDeviation(
-                name: name,
-                target: target,
-                metric: metric,
-                percentile: percentile,
-                baseValue: normalize(lhs),
-                comparisonValue: normalize(rhs),
-                difference: Int(Statistics.roundToDecimalplaces(relativeDifference, 1)),
-                differenceThreshold: Int(threshold),
-                relative: true,
-                units: Statistics.Units(timeUnits)
-            )
-            if relativeDifference > threshold {
-                thresholdResults.regressions.append(deviation)
-            } else if relativeDifference < -threshold {
-                thresholdResults.improvements.append(deviation)
+            if let threshold = thresholdsFromCode.relative[percentile],
+                !(-threshold...threshold).contains(relativeDifference)
+            {
+                let deviation = ThresholdDeviation(
+                    name: name,
+                    target: target,
+                    metric: metric,
+                    percentile: percentile,
+                    baseValue: normalize(lhs),
+                    deviation: .relative(
+                        comparedTo: normalize(rhs),
+                        differencePercentage: Statistics.roundToDecimalPlaces(relativeDifference, 1),
+                        tolerancePercentage: Statistics.roundToDecimalPlaces(threshold, 1)
+                    ),
+                    units: Statistics.Units(timeUnits)
+                )
+                if relativeDifference > threshold {
+                    thresholdResults.regressions.append(deviation)
+                } else if relativeDifference < -threshold {
+                    thresholdResults.improvements.append(deviation)
+                }
             }
-        }
 
-        if let threshold = thresholds.absolute[percentile], !(-threshold...threshold).contains(absoluteDifference) {
-            let deviation = ThresholdDeviation(
-                name: name,
-                target: target,
-                metric: metric,
-                percentile: percentile,
-                baseValue: normalize(lhs),
-                comparisonValue: normalize(rhs),
-                difference: normalize(absoluteDifference),
-                differenceThreshold: normalize(threshold),
-                relative: false,
-                units: Statistics.Units(timeUnits)
-            )
+            if let threshold = thresholdsFromCode.absolute[percentile],
+                !(-threshold...threshold).contains(absoluteDifference)
+            {
+                let deviation = ThresholdDeviation(
+                    name: name,
+                    target: target,
+                    metric: metric,
+                    percentile: percentile,
+                    baseValue: normalize(lhs),
+                    deviation: .absolute(
+                        comparedTo: normalize(rhs),
+                        difference: normalize(absoluteDifference),
+                        tolerance: normalize(threshold)
+                    ),
+                    units: Statistics.Units(timeUnits)
+                )
+                if absoluteDifference > threshold {
+                    thresholdResults.regressions.append(deviation)
+                } else if absoluteDifference < -threshold {
+                    thresholdResults.improvements.append(deviation)
+                }
+            }
 
-            if absoluteDifference > threshold {
-                thresholdResults.regressions.append(deviation)
-            } else if absoluteDifference < -threshold {
-                thresholdResults.improvements.append(deviation)
+        case .relativeOrRange(let rhs):
+            if thresholdsFromCode.definitelyContainsUserSpecifiedThresholds(at: percentile) {
+                print(
+                    """
+                    Warning: Static threshold files contain relative or range thresholds for metric '\(metric)' at
+                    percentile '\(percentile)', but 'configuration.thresholds' also contains threshold tolerance for this metric.
+                    Will ignore 'configuration.thresholds'.
+                    To silence this warning, remove 'configuration.thresholds' from your benchmark code of this benchmark.
+
+                    """
+                )
+            }
+
+            if let relative = rhs.relative {
+                let relativeComparison = relative.contains(lhs)
+                if !relativeComparison.contains {
+                    let relativeDifference = (reverseComparison ? 1 : -1) * relativeComparison.deviation
+                    let deviation = ThresholdDeviation(
+                        name: name,
+                        target: target,
+                        metric: metric,
+                        percentile: percentile,
+                        baseValue: normalize(lhs),
+                        deviation: .relative(
+                            comparedTo: normalize(relative.base),
+                            differencePercentage: Statistics.roundToDecimalPlaces(relativeDifference, 1),
+                            tolerancePercentage: Statistics.roundToDecimalPlaces(
+                                relative.tolerancePercentage,
+                                1
+                            )
+                        ),
+                        units: Statistics.Units(timeUnits)
+                    )
+                    if relativeDifference > relative.tolerancePercentage {
+                        thresholdResults.regressions.append(deviation)
+                    } else if relativeDifference < -relative.tolerancePercentage {
+                        thresholdResults.improvements.append(deviation)
+                    }
+                }
+            }
+
+            if let range = rhs.range, !range.contains(lhs) {
+                let deviation = ThresholdDeviation(
+                    name: name,
+                    target: target,
+                    metric: metric,
+                    percentile: percentile,
+                    baseValue: normalize(lhs),
+                    deviation: .range(
+                        min: normalize(range.min),
+                        max: normalize(range.max)
+                    ),
+                    units: Statistics.Units(timeUnits)
+                )
+                if lhs < range.min {
+                    thresholdResults.regressions.append(deviation)
+                } else if lhs > range.max {
+                    thresholdResults.improvements.append(deviation)
+                }
             }
         }
     }
@@ -564,7 +662,7 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
             appendDeviationResultsFor(
                 lhs.metric,
                 lhsPercentiles[percentile],
-                rhsPercentiles[percentile],
+                .absolute(rhsPercentiles[percentile]),
                 Self.Percentile(rawValue: percentile)!,
                 thresholds,
                 &thresholdResults,
@@ -579,7 +677,7 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
     // Absolute checks for --check-absolute, just check p90
     public func deviationsAgainstAbsoluteThresholds(
         thresholds: BenchmarkThresholds,
-        p90Threshold: BenchmarkThresholds.AbsoluteThreshold,
+        p90Threshold: BenchmarkThreshold,
         name: String = "test",
         target: String = "test"
     ) -> ThresholdDeviations {
