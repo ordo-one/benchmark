@@ -35,7 +35,6 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
     .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.4")),
     .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
-    .package(url: "https://github.com/ordo-one/package-jemalloc.git", .upToNextMajor(from: "1.0.0")),
     mallocInterposerDependency,
 ]
 

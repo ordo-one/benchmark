@@ -45,10 +45,16 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     case mallocCountLarge
     /// Number of total malloc calls
     case mallocCountTotal
-    /// Number of totatl free calls
+    /// Number of total free calls
     case freeCountTotal
     /// The amount of memory allocated in bytes through malloc calls
     case mallocBytesCount
+    /// Net unfreed allocation count within the measured region.
+    ///
+    /// Reports `malloc` count minus `free` count from the interposer backend. Because counting is
+    /// process-global, this metric is only reliable for single-threaded benchmarks with quiescent
+    /// background allocation.
+    case mallocFreeDelta
     /// The amount of allocated resident memory according to the memory allocator
     /// by the application (does not include metadata overhead etc).
     ///
@@ -57,14 +63,13 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     /// > for gross allocated bytes, or ``peakMemoryResident`` for OS-sampled resident memory.
     @available(*, deprecated, message: "Only produced by the jemalloc backend; use mallocBytesCount or peakMemoryResident")
     case allocatedResidentMemory
-    /// Net unfreed allocations within the measured region.
+    /// Legacy jemalloc resident-byte growth within the measured region.
     ///
-    /// Backend-dependent: the 6.3+ interposer backend reports `malloc` count minus `free` count,
-    /// while the jemalloc backend (Swift ≤6.2) reports resident-byte growth. Because counting is
-    /// process-global, this metric is only reliable for single-threaded benchmarks with quiescent
-    /// background allocation.
+    /// Only produced by the jemalloc backend (Swift ≤6.2). The 6.3+ interposer backend does not
+    /// produce this metric; use ``mallocFreeDelta`` for allocation-count delta or
+    /// ``memoryLeakedBytes`` for requested-byte delta.
     case memoryLeaked
-    /// Leaked memeory in bytes
+    /// Net unfreed requested bytes within the measured region.
     case memoryLeakedBytes
     /// Measure number of syscalls made during the test
     case syscalls
@@ -144,7 +149,7 @@ public extension BenchmarkMetric {
         switch self {
         case .cpuSystem, .cpuTotal, .cpuUser, .wallClock:
             return true
-        case .mallocCountSmall, .mallocCountLarge, .mallocCountTotal, .freeCountTotal,
+        case .mallocCountSmall, .mallocCountLarge, .mallocCountTotal, .freeCountTotal, .mallocFreeDelta,
              .mallocBytesCount, .memoryLeaked, .memoryLeakedBytes:
             return true
         case .syscalls:
@@ -202,10 +207,12 @@ public extension BenchmarkMetric {
             return "Malloc (total)"
         case .mallocBytesCount:
             return "Malloc (bytes total)"
+        case .mallocFreeDelta:
+            return "Malloc / free Δ"
         case .allocatedResidentMemory:
             return "Memory (allocated resident)"
         case .memoryLeaked:
-            return "Malloc / free Δ"
+            return "Memory leaked (resident)"
         case .memoryLeakedBytes:
             return "Malloc / free Δ (bytes)"
         case .syscalls:
@@ -315,13 +322,15 @@ public extension BenchmarkMetric {
             return 30
         case .instructions:
             return 31
+        case .mallocFreeDelta:
+            return 32
         default:
             return 0 // custom payloads must be stored in dictionary
         }
     }
 
     @_documentation(visibility: internal)
-    static var maxIndex: Int { 31 } //
+    static var maxIndex: Int { 32 } //
 
     // Used by the Benchmark Executor for efficient indexing into results
     @_documentation(visibility: internal)
@@ -389,6 +398,8 @@ public extension BenchmarkMetric {
             return .retainReleaseDelta
         case 31:
             return .instructions
+        case 32:
+            return .mallocFreeDelta
         default:
             break
         }
@@ -426,6 +437,8 @@ public extension BenchmarkMetric {
             return "freeCountTotal"
         case .mallocBytesCount:
             return "mallocBytesCount"
+        case .mallocFreeDelta:
+            return "mallocFreeDelta"
         case .allocatedResidentMemory:
             return "allocatedResidentMemory"
         case .memoryLeaked:
@@ -504,6 +517,8 @@ public extension BenchmarkMetric {
             self = BenchmarkMetric.freeCountTotal
         case "mallocBytesCount":
             self = BenchmarkMetric.mallocBytesCount
+        case "mallocFreeDelta":
+            self = BenchmarkMetric.mallocFreeDelta
         case "allocatedResidentMemory":
             self = BenchmarkMetric.allocatedResidentMemory
         case "memoryLeaked":

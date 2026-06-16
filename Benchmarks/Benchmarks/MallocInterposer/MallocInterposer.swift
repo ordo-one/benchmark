@@ -36,7 +36,7 @@ let mallocMetrics: [BenchmarkMetric] = [
     .mallocCountTotal,
     .freeCountTotal,
     .mallocBytesCount,
-    .memoryLeaked,
+    .mallocFreeDelta,
     .memoryLeakedBytes,
 ]
 
@@ -165,7 +165,7 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    // Deliberate leak: malloc without free. Confirms memoryLeaked /
+    // Deliberate leak: malloc without free. Confirms mallocFreeDelta /
     // memoryLeakedBytes track unbalanced flow correctly.
     //   Expected per iter: malloc=1, free=0, leaked=1, leakedBytes≈128.
     // The accumulated leak across the run is bounded:

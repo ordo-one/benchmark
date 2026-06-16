@@ -30,53 +30,84 @@ public extension BenchmarkMetric {
     /// There is also an convenience extension on Array defined such that you can write just `.default` rather than `BenchmarkMetric.default`
     ///
     static var `default`: [BenchmarkMetric] {
-        [
+        var metrics: [BenchmarkMetric] = [
             .wallClock,
             .cpuTotal,
             .mallocCountTotal,
+        ]
+        #if canImport(MallocInterposerSwift)
+        metrics += [
             .freeCountTotal,
             .mallocBytesCount,
-            .memoryLeaked,
+            .mallocFreeDelta,
             .memoryLeakedBytes,
+        ]
+        #else
+        metrics += [
+            .memoryLeaked,
+        ]
+        #endif
+        metrics += [
             .throughput,
             .instructions,
             .peakMemoryResident,
         ]
+        return metrics
     }
 
     /// A collection of extended system benchmarks.
     static var extended: [BenchmarkMetric] {
-        [
+        var metrics: [BenchmarkMetric] = [
             .wallClock,
             .cpuUser,
             .cpuTotal,
             .mallocCountTotal,
+        ]
+        #if canImport(MallocInterposerSwift)
+        metrics += [
             .freeCountTotal,
             .mallocBytesCount,
+            .mallocFreeDelta,
+            .memoryLeakedBytes,
+        ]
+        #else
+        metrics += [
+            .memoryLeaked,
+        ]
+        #endif
+        metrics += [
             .throughput,
             .peakMemoryResident,
-            .memoryLeaked,
-            .memoryLeakedBytes,
             .syscalls,
             .instructions,
         ]
+        return metrics
     }
 
     /// A collection of memory benchmarks.
     static var memory: [BenchmarkMetric] {
-        [
+        var metrics: [BenchmarkMetric] = [
             .peakMemoryResident,
             .peakMemoryResidentDelta,
             .peakMemoryVirtual,
             .mallocCountSmall,
             .mallocCountLarge,
             .mallocCountTotal,
+        ]
+        #if canImport(MallocInterposerSwift)
+        metrics += [
             .mallocBytesCount,
             .freeCountTotal,
-            .memoryLeaked,
+            .mallocFreeDelta,
             .memoryLeakedBytes,
+        ]
+        #else
+        metrics += [
+            .memoryLeaked,
             .allocatedResidentMemory,
         ]
+        #endif
+        return metrics
     }
 
     /// A collection of ARC metrics
@@ -129,6 +160,7 @@ public extension BenchmarkMetric {
             .mallocCountTotal,
             .freeCountTotal,
             .mallocBytesCount,
+            .mallocFreeDelta,
             .memoryLeaked,
             .memoryLeakedBytes,
             .syscalls,

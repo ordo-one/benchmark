@@ -254,12 +254,13 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
                 if mallocStatsRequested {
                     #if canImport(MallocInterposerSwift)
-                    // allocatedResidentMemory is intentionally not populated on the interposer path:
-                    // the interposer cannot measure the allocator's resident set (only gross requested
-                    // bytes). It remains produced by the jemalloc backend (Swift <=6.2). Use
-                    // mallocBytesCount for gross allocated bytes or peakMemoryResident for OS-sampled
-                    // resident memory. The leak/scaling arithmetic lives in BenchmarkExecutor
-                    // .mallocStatistics(...) so it can be unit-tested without a live interposer.
+                    // allocatedResidentMemory and the legacy memoryLeaked metric are intentionally
+                    // not populated on the interposer path: the interposer cannot measure the
+                    // allocator's resident set. Use mallocBytesCount / memoryLeakedBytes for
+                    // requested-byte accounting, mallocFreeDelta for allocation-count delta, or
+                    // peakMemoryResident for OS-sampled resident memory. The leak/scaling arithmetic
+                    // lives in BenchmarkExecutor.mallocStatistics(...) so it can be unit-tested
+                    // without a live interposer.
                     let mallocMetrics = BenchmarkExecutor.mallocStatistics(
                         mallocCountDelta: stopMallocStats.mallocCount - startMallocStats.mallocCount,
                         mallocBytesDelta: stopMallocStats.mallocBytesCount - startMallocStats.mallocBytesCount,
@@ -278,9 +279,9 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
                     let allocatedResidentMemory = stopMallocStats.allocatedResidentMemory - startMallocStats.allocatedResidentMemory
                     statistics[BenchmarkMetric.allocatedResidentMemory.index].add(allocatedResidentMemory)
 
-                    // jemalloc has no free counter, so memoryLeaked is reported (as on the
-                    // pre-interposer path) as resident-byte growth rather than a malloc-minus-free
-                    // count. Backend-dependent definition; see BenchmarkMetric.memoryLeaked docs.
+                    // jemalloc has no free counter, so memoryLeaked keeps the legacy resident-byte
+                    // growth definition. The interposer backend uses mallocFreeDelta for
+                    // malloc-minus-free count and memoryLeakedBytes for requested-byte delta.
                     statistics[BenchmarkMetric.memoryLeaked.index].add(max(0, allocatedResidentMemory))
 
                     let mallocSmallCount = stopMallocStats.mallocCountSmall - startMallocStats.mallocCountSmall

@@ -32,8 +32,9 @@ final class MallocStatisticsTests: XCTestCase {
         XCTAssertEqual(value(metrics, .mallocCountTotal), 10)
         XCTAssertEqual(value(metrics, .freeCountTotal), 10)
         XCTAssertEqual(value(metrics, .mallocBytesCount), 1_024)
-        XCTAssertEqual(value(metrics, .memoryLeaked), 0)
+        XCTAssertEqual(value(metrics, .mallocFreeDelta), 0)
         XCTAssertEqual(value(metrics, .memoryLeakedBytes), 0)
+        XCTAssertNil(value(metrics, .memoryLeaked), "interposer stats must not emit the legacy jemalloc memoryLeaked metric")
     }
 
     func testUnbalancedAllocReportsLeak() {
@@ -42,7 +43,7 @@ final class MallocStatisticsTests: XCTestCase {
             mallocSmallDelta: 7, mallocLargeDelta: 3,
             freeCountDelta: 6, freeBytesDelta: 1_024
         )
-        XCTAssertEqual(value(metrics, .memoryLeaked), 4) // 10 mallocs - 6 frees
+        XCTAssertEqual(value(metrics, .mallocFreeDelta), 4) // 10 mallocs - 6 frees
         XCTAssertEqual(value(metrics, .memoryLeakedBytes), 1_024) // 2048 - 1024
     }
 
@@ -55,7 +56,7 @@ final class MallocStatisticsTests: XCTestCase {
             mallocSmallDelta: 3, mallocLargeDelta: 0,
             freeCountDelta: 5, freeBytesDelta: 4_096
         )
-        XCTAssertEqual(value(metrics, .memoryLeaked), 0)
+        XCTAssertEqual(value(metrics, .mallocFreeDelta), 0)
         XCTAssertEqual(value(metrics, .memoryLeakedBytes), 0)
     }
 
@@ -74,6 +75,7 @@ final class MallocStatisticsTests: XCTestCase {
         XCTAssertEqual(value(metrics, .mallocCountLarge), 4)
         XCTAssertEqual(value(metrics, .mallocBytesCount), 100)
         XCTAssertEqual(value(metrics, .freeCountTotal), 3)
+        XCTAssertEqual(value(metrics, .mallocFreeDelta), 7)
     }
 
     /// The whole per-iteration malloc count/byte family must scale together, otherwise the scaled
@@ -82,7 +84,7 @@ final class MallocStatisticsTests: XCTestCase {
     func testMallocFamilyScalesConsistently() {
         let scaledFamily: [BenchmarkMetric] = [
             .mallocCountSmall, .mallocCountLarge, .mallocCountTotal,
-            .freeCountTotal, .mallocBytesCount, .memoryLeaked, .memoryLeakedBytes,
+            .freeCountTotal, .mallocBytesCount, .mallocFreeDelta, .memoryLeakedBytes,
         ]
         for metric in scaledFamily {
             XCTAssertTrue(
@@ -90,6 +92,20 @@ final class MallocStatisticsTests: XCTestCase {
                 "\(metric.rawDescription) must scale with the rest of the malloc family"
             )
         }
+    }
+
+    func testDefaultMetricsUseBackendSpecificLeakMetrics() {
+        #if canImport(MallocInterposerSwift)
+        XCTAssertTrue(BenchmarkMetric.default.contains(.mallocFreeDelta))
+        XCTAssertTrue(BenchmarkMetric.default.contains(.memoryLeakedBytes))
+        XCTAssertFalse(
+            BenchmarkMetric.default.contains(.memoryLeaked),
+            "interposer defaults must not emit legacy jemalloc memoryLeaked"
+        )
+        #else
+        XCTAssertTrue(BenchmarkMetric.default.contains(.memoryLeaked))
+        XCTAssertFalse(BenchmarkMetric.default.contains(.mallocFreeDelta))
+        #endif
     }
 
     /// Metric array slots must be unique so two metrics never collide on the same `statistics` slot.
