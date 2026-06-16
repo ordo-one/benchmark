@@ -31,7 +31,7 @@ let mallocInterposerDependency: Package.Dependency = {
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
-    .package(url: "https://github.com/apple/swift-argument-parser.git", "1.1.0"..<"1.6.0"),
+    .package(url: "https://github.com/apple/swift-argument-parser.git", .upToNextMajor(from: "1.6.0")),
     .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
     .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.4")),
     .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
