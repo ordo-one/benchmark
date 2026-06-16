@@ -33,15 +33,13 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     case peakMemoryVirtual
     /// Number of small malloc calls
     ///
-    /// > Deprecated: The small/large split is backend-dependent — the jemalloc backend
-    /// > (Swift ≤6.2) splits on jemalloc's size classes, while the 6.3+ interposer backend
-    /// > splits on a coarser `requested size > page size` threshold. Prefer ``mallocCountTotal``.
-    @available(*, deprecated, message: "Backend-dependent small/large split; prefer mallocCountTotal")
+    /// The small/large split is backend-dependent: the jemalloc backend (Swift ≤6.2) splits on
+    /// jemalloc's size classes, while the 6.3+ interposer backend splits on a coarser
+    /// `requested size > page size` threshold.
     case mallocCountSmall
     /// Number of large malloc calls
     ///
-    /// > Deprecated: See ``mallocCountSmall``.
-    @available(*, deprecated, message: "Backend-dependent small/large split; prefer mallocCountTotal")
+    /// The backend-specific counterpart to ``mallocCountSmall``.
     case mallocCountLarge
     /// Number of total malloc calls
     case mallocCountTotal

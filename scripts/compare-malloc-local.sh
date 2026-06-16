@@ -93,24 +93,6 @@ for f in "$@"; do
   FILTER_ARGS+=(--filter "$f")
 done
 
-# SwiftPM #9062 workaround: copy lib*-tool.dylib → lib*.dylib so the spawned
-# benchmark tool finds the interposer at the path it expects. Only relevant
-# on the interposer (6.3) run.
-fix_tool_dylibs() {
-  local search_dir="$1"
-  local copied=0
-  while IFS= read -r src; do
-    local dst="${src/-tool.dylib/.dylib}"
-    if [[ ! -f "$dst" || "$src" -nt "$dst" ]]; then
-      cp -p "$src" "$dst"
-      copied=$((copied + 1))
-    fi
-  done < <(find "$search_dir" -name "libMallocInterposer*-tool.dylib" 2>/dev/null)
-  if ((copied > 0)); then
-    warn "Renamed $copied -tool.dylib → .dylib (SwiftPM #9062 workaround)"
-  fi
-}
-
 run_jemalloc() {
   step "Run 1: Swift $TOOLCHAIN_OLD (jemalloc) → baseline '$BASELINE_OLD'  [scratch: $SCRATCH_OLD]"
   swiftly run +"$TOOLCHAIN_OLD" \
@@ -125,25 +107,14 @@ run_jemalloc() {
 
 run_interposer() {
   step "Run 2: Swift $TOOLCHAIN_NEW (interposer) → baseline '$BASELINE_NEW'  [scratch: $SCRATCH_NEW]"
-  if ! swiftly run +"$TOOLCHAIN_NEW" \
+  swiftly run +"$TOOLCHAIN_NEW" \
     swift package \
     --scratch-path "$SCRATCH_NEW" \
     --allow-writing-to-package-directory benchmark \
     baseline update "$BASELINE_NEW" \
     --target "$TARGET" \
     --quiet --no-progress \
-    "${FILTER_ARGS[@]}"; then
-    warn "First attempt failed — applying SwiftPM #9062 workaround and retrying"
-    fix_tool_dylibs "$SCRATCH_NEW"
-    swiftly run +"$TOOLCHAIN_NEW" \
-      swift package \
-      --scratch-path "$SCRATCH_NEW" \
-      --allow-writing-to-package-directory benchmark \
-      baseline update "$BASELINE_NEW" \
-      --target "$TARGET" \
-      --quiet --no-progress \
-      "${FILTER_ARGS[@]}"
-  fi
+    "${FILTER_ARGS[@]}"
 }
 
 run_jemalloc
