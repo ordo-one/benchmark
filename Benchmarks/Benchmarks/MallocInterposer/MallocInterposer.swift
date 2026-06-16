@@ -63,9 +63,9 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=1 (small=1, large=0), free=1, leaked=0.
     Benchmark("Malloc 64B + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = malloc(64)
-            blackHole(p)
-            free(p)
+            let ptr = malloc(64)
+            blackHole(ptr)
+            free(ptr)
         }
     }
 
@@ -73,9 +73,9 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=1 (small=0, large=1), free=1.
     Benchmark("Malloc 2 MiB + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = malloc(2 * 1024 * 1024)
-            blackHole(p)
-            free(p)
+            let ptr = malloc(2 * 1_024 * 1_024)
+            blackHole(ptr)
+            free(ptr)
         }
     }
 
@@ -83,9 +83,9 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=1, free=1.
     Benchmark("Calloc 8x8 + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = calloc(8, 8)
-            blackHole(p)
-            free(p)
+            let ptr = calloc(8, 8)
+            blackHole(ptr)
+            free(ptr)
         }
     }
 
@@ -93,10 +93,10 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=2, free=2.
     Benchmark("Realloc grow 64→256 + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p1 = malloc(64)
-            let p2 = realloc(p1, 256)
-            blackHole(p2)
-            free(p2)
+            let original = malloc(64)
+            let grown = realloc(original, 256)
+            blackHole(grown)
+            free(grown)
         }
     }
 
@@ -104,9 +104,9 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=1, free=1.
     Benchmark("Realloc(NULL, 128) + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = realloc(nil, 128)
-            blackHole(p)
-            free(p)
+            let ptr = realloc(nil, 128)
+            blackHole(ptr)
+            free(ptr)
         }
     }
 
@@ -114,9 +114,9 @@ let benchmarks: @Sendable () -> Void = {
     //   Expected per iter: malloc=1, free=1.
     Benchmark("Malloc + realloc(p, 0)") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = malloc(64)
-            let r = realloc(p, 0)
-            blackHole(r) // expected nil
+            let ptr = malloc(64)
+            let resized = realloc(ptr, 0)
+            blackHole(resized) // expected nil
         }
     }
 
@@ -125,7 +125,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark("posix_memalign(64, 1024) + free") { benchmark in
         var ptr: UnsafeMutableRawPointer?
         for _ in benchmark.scaledIterations {
-            _ = posix_memalign(&ptr, 64, 1024)
+            _ = posix_memalign(&ptr, 64, 1_024)
             blackHole(ptr)
             free(ptr)
         }
@@ -139,9 +139,9 @@ let benchmarks: @Sendable () -> Void = {
     #if !canImport(Darwin)
     Benchmark("aligned_alloc(64, 1024) + free") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = aligned_alloc(64, 1024)
-            blackHole(p)
-            free(p)
+            let ptr = aligned_alloc(64, 1_024)
+            blackHole(ptr)
+            free(ptr)
         }
     }
     #endif
@@ -150,16 +150,16 @@ let benchmarks: @Sendable () -> Void = {
     // linearly and isn't accidentally collapsed/de-duplicated.
     //   Expected per iter: malloc=16, free=16.
     Benchmark("Malloc x16 + free x16") { benchmark in
-        let n = 16
-        let buf = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: n)
+        let count = 16
+        let buf = UnsafeMutablePointer<UnsafeMutableRawPointer?>.allocate(capacity: count)
         defer { buf.deallocate() }
-        buf.update(repeating: nil, count: n)
+        buf.update(repeating: nil, count: count)
 
         for _ in benchmark.scaledIterations {
-            for i in 0..<n {
+            for i in 0..<count {
                 buf[i] = malloc(48)
             }
-            for i in 0..<n {
+            for i in 0..<count {
                 free(buf[i])
             }
         }
@@ -172,8 +172,8 @@ let benchmarks: @Sendable () -> Void = {
     //   <= maxIterations * scalingFactor * 128 = 100 * 1000 * 128 = ~12.5 MiB.
     Benchmark("Leak: malloc 128B (no free)") { benchmark in
         for _ in benchmark.scaledIterations {
-            let p = malloc(128)
-            blackHole(p)
+            let ptr = malloc(128)
+            blackHole(ptr)
         }
     }
 
@@ -195,8 +195,8 @@ let benchmarks: @Sendable () -> Void = {
     // be stable.
     Benchmark("Swift String (long, heap)") { benchmark in
         for _ in benchmark.scaledIterations {
-            let s = String(repeating: "x", count: 256)
-            blackHole(s)
+            let str = String(repeating: "x", count: 256)
+            blackHole(str)
         }
     }
 }
