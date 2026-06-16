@@ -2,6 +2,19 @@
 
 import PackageDescription
 
+import class Foundation.ProcessInfo
+
+// If the environment variable BENCHMARK_DISABLE_JEMALLOC is set disable Jemalloc trait (backward compatibility)
+let disableJemalloc = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_JEMALLOC"] != nil
+
+let defaultTraits: Set<String>
+
+if disableJemalloc {
+    defaultTraits = []
+} else {
+    defaultTraits = ["Jemalloc"]
+}
+
 let package = Package(
     name: "Benchmark",
     platforms: [
@@ -18,7 +31,7 @@ let package = Package(
     ],
     traits: [
         .trait(name: "Jemalloc"),
-        .default(enabledTraits: ["Jemalloc"]),
+        .default(enabledTraits: defaultTraits),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),

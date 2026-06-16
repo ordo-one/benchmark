@@ -63,7 +63,7 @@ extension BenchmarkExecutor {
     /// (more frees than mallocs — e.g. freeing a warmup survivor, or cross-thread frees) is not a
     /// leak, and clamping records a `0` sample rather than letting `Statistics.add` drop it, which
     /// would desync the column's sample count and bias the average upward.
-    static func mallocStatistics(
+    static func mallocStatistics( // swiftlint:disable:this function_parameter_count
         mallocCountDelta: Int,
         mallocBytesDelta: Int,
         mallocSmallDelta: Int,
