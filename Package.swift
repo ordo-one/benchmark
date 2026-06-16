@@ -20,7 +20,8 @@ if disableJemalloc {
 // when iterating on the interposer alongside this package.
 let mallocInterposerDependency: Package.Dependency = {
     if let localPath = ProcessInfo.processInfo.environment["MALLOC_INTERPOSER_LOCAL_PATH"],
-       localPath.isEmpty == false {
+        localPath.isEmpty == false
+    {
         return .package(path: localPath)
     }
     return .package(
@@ -40,7 +41,7 @@ var packageDependencies: [Package.Dependency] = [
 
 #if os(Linux) && compiler(>=6.3)
 packageDependencies += [
-    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.2.0")),
+    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.0.0"))
 ]
 #endif
 
