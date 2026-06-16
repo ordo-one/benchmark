@@ -33,8 +33,6 @@ public extension BenchmarkMetric {
         [
             .wallClock,
             .cpuTotal,
-            .mallocCountSmall,
-            .mallocCountLarge,
             .mallocCountTotal,
             .freeCountTotal,
             .mallocBytesCount,
@@ -52,8 +50,6 @@ public extension BenchmarkMetric {
             .wallClock,
             .cpuUser,
             .cpuTotal,
-            .mallocCountSmall,
-            .mallocCountLarge,
             .mallocCountTotal,
             .freeCountTotal,
             .mallocBytesCount,

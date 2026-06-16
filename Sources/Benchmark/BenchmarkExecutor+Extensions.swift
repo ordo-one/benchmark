@@ -46,6 +46,34 @@ extension BenchmarkExecutor {
 }
 
 extension BenchmarkExecutor {
+    /// Maps a measured window's interposer counter deltas to the `(metric, value)` pairs to record.
+    ///
+    /// Extracted as a pure function so the leak/scaling arithmetic can be unit-tested without a live
+    /// interposer. `memoryLeaked` / `memoryLeakedBytes` are clamped to `0`: a net-negative window
+    /// (more frees than mallocs — e.g. freeing a warmup survivor, or cross-thread frees) is not a
+    /// leak, and clamping records a `0` sample rather than letting `Statistics.add` drop it, which
+    /// would desync the column's sample count and bias the average upward.
+    static func mallocStatistics(
+        mallocCountDelta: Int,
+        mallocBytesDelta: Int,
+        mallocSmallDelta: Int,
+        mallocLargeDelta: Int,
+        freeCountDelta: Int,
+        freeBytesDelta: Int
+    ) -> [(metric: BenchmarkMetric, value: Int)] {
+        [
+            (.mallocCountTotal, mallocCountDelta),
+            (.mallocBytesCount, mallocBytesDelta),
+            (.mallocCountSmall, mallocSmallDelta),
+            (.mallocCountLarge, mallocLargeDelta),
+            (.freeCountTotal, freeCountDelta),
+            (.memoryLeaked, max(0, mallocCountDelta - freeCountDelta)),
+            (.memoryLeakedBytes, max(0, mallocBytesDelta - freeBytesDelta)),
+        ]
+    }
+}
+
+extension BenchmarkExecutor {
     func operatingSystemsStatsProducerNeeded(_ metric: BenchmarkMetric) -> Bool {
         switch metric {
         case .cpuUser:

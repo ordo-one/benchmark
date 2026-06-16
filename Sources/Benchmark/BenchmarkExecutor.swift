@@ -254,36 +254,34 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
                 if mallocStatsRequested {
                     #if canImport(MallocInterposerSwift)
-                    let mallocCount = stopMallocStats.mallocCount - startMallocStats.mallocCount
-                    statistics[BenchmarkMetric.mallocCountTotal.index].add(mallocCount)
-
-                    let mallocBytesCount = stopMallocStats.mallocBytesCount - startMallocStats.mallocBytesCount
-                    statistics[BenchmarkMetric.mallocBytesCount.index].add(mallocBytesCount)
-
-                    // For backwards compatibility we keep allocatedResidentMemory as the total malloc bytes
-                    statistics[BenchmarkMetric.allocatedResidentMemory.index].add(mallocBytesCount)
-
-                    let mallocSmallCount = stopMallocStats.mallocSmallCount - startMallocStats.mallocSmallCount
-                    statistics[BenchmarkMetric.mallocCountSmall.index].add(mallocSmallCount)
-
-                    let mallocLargeCount = stopMallocStats.mallocLargeCount - startMallocStats.mallocLargeCount
-                    statistics[BenchmarkMetric.mallocCountLarge.index].add(mallocLargeCount)
-
-                    let freeCount = stopMallocStats.freeCount - startMallocStats.freeCount
-                    statistics[BenchmarkMetric.freeCountTotal.index].add(freeCount)
-
-                    let memoryLeakedCount = mallocCount - freeCount
-                    statistics[BenchmarkMetric.memoryLeaked.index].add(Int(memoryLeakedCount))
-
-                    let freeBytes = stopMallocStats.freeBytesCount - startMallocStats.freeBytesCount
-                    let memoryLeakedBytes = mallocBytesCount - freeBytes
-                    statistics[BenchmarkMetric.memoryLeakedBytes.index].add(Int(memoryLeakedBytes))
+                    // allocatedResidentMemory is intentionally not populated on the interposer path:
+                    // the interposer cannot measure the allocator's resident set (only gross requested
+                    // bytes). It remains produced by the jemalloc backend (Swift <=6.2). Use
+                    // mallocBytesCount for gross allocated bytes or peakMemoryResident for OS-sampled
+                    // resident memory. The leak/scaling arithmetic lives in BenchmarkExecutor
+                    // .mallocStatistics(...) so it can be unit-tested without a live interposer.
+                    let mallocMetrics = BenchmarkExecutor.mallocStatistics(
+                        mallocCountDelta: stopMallocStats.mallocCount - startMallocStats.mallocCount,
+                        mallocBytesDelta: stopMallocStats.mallocBytesCount - startMallocStats.mallocBytesCount,
+                        mallocSmallDelta: stopMallocStats.mallocSmallCount - startMallocStats.mallocSmallCount,
+                        mallocLargeDelta: stopMallocStats.mallocLargeCount - startMallocStats.mallocLargeCount,
+                        freeCountDelta: stopMallocStats.freeCount - startMallocStats.freeCount,
+                        freeBytesDelta: stopMallocStats.freeBytesCount - startMallocStats.freeBytesCount
+                    )
+                    for (metric, value) in mallocMetrics {
+                        statistics[metric.index].add(value)
+                    }
                     #else
                     let mallocCountTotal = stopMallocStats.mallocCountTotal - startMallocStats.mallocCountTotal
                     statistics[BenchmarkMetric.mallocCountTotal.index].add(mallocCountTotal)
 
                     let allocatedResidentMemory = stopMallocStats.allocatedResidentMemory - startMallocStats.allocatedResidentMemory
                     statistics[BenchmarkMetric.allocatedResidentMemory.index].add(allocatedResidentMemory)
+
+                    // jemalloc has no free counter, so memoryLeaked is reported (as on the
+                    // pre-interposer path) as resident-byte growth rather than a malloc-minus-free
+                    // count. Backend-dependent definition; see BenchmarkMetric.memoryLeaked docs.
+                    statistics[BenchmarkMetric.memoryLeaked.index].add(max(0, allocatedResidentMemory))
 
                     let mallocSmallCount = stopMallocStats.mallocCountSmall - startMallocStats.mallocCountSmall
                     statistics[BenchmarkMetric.mallocCountSmall.index].add(mallocSmallCount)

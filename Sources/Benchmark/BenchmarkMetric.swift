@@ -32,21 +32,37 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     /// Measure virtual memory usage - sampled during runtime
     case peakMemoryVirtual
     /// Number of small malloc calls
+    ///
+    /// > Deprecated: The small/large split is backend-dependent — the jemalloc backend
+    /// > (Swift ≤6.2) splits on jemalloc's size classes, while the 6.3+ interposer backend
+    /// > splits on a coarser `requested size > page size` threshold. Prefer ``mallocCountTotal``.
+    @available(*, deprecated, message: "Backend-dependent small/large split; prefer mallocCountTotal")
     case mallocCountSmall
     /// Number of large malloc calls
+    ///
+    /// > Deprecated: See ``mallocCountSmall``.
+    @available(*, deprecated, message: "Backend-dependent small/large split; prefer mallocCountTotal")
     case mallocCountLarge
-    /// Number of total malloc calls (small+large)
+    /// Number of total malloc calls
     case mallocCountTotal
     /// Number of totatl free calls
     case freeCountTotal
     /// The amount of memory allocated in bytes through malloc calls
     case mallocBytesCount
     /// The amount of allocated resident memory according to the memory allocator
-    /// by the application (does not include metadata overhead etc)
-    /// **Deprecated** in favour of ``mallocBytesCount``. It value is equal to ``mallocBytesCount``.
-    @available(*, deprecated, message: "Deprecated in favor of mallocBytesCount")
+    /// by the application (does not include metadata overhead etc).
+    ///
+    /// > Deprecated: Only produced by the jemalloc backend (Swift ≤6.2). The 6.3+
+    /// > interposer backend does not measure resident memory — use ``mallocBytesCount``
+    /// > for gross allocated bytes, or ``peakMemoryResident`` for OS-sampled resident memory.
+    @available(*, deprecated, message: "Only produced by the jemalloc backend; use mallocBytesCount or peakMemoryResident")
     case allocatedResidentMemory
-    /// Number of small+large mallocs - small+large frees in resident memory
+    /// Net unfreed allocations within the measured region.
+    ///
+    /// Backend-dependent: the 6.3+ interposer backend reports `malloc` count minus `free` count,
+    /// while the jemalloc backend (Swift ≤6.2) reports resident-byte growth. Because counting is
+    /// process-global, this metric is only reliable for single-threaded benchmarks with quiescent
+    /// background allocation.
     case memoryLeaked
     /// Leaked memeory in bytes
     case memoryLeakedBytes
@@ -128,7 +144,8 @@ public extension BenchmarkMetric {
         switch self {
         case .cpuSystem, .cpuTotal, .cpuUser, .wallClock:
             return true
-        case .mallocCountTotal, .memoryLeaked, .memoryLeakedBytes:
+        case .mallocCountSmall, .mallocCountLarge, .mallocCountTotal, .freeCountTotal,
+             .mallocBytesCount, .memoryLeaked, .memoryLeakedBytes:
             return true
         case .syscalls:
             return true

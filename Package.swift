@@ -41,7 +41,7 @@ var packageDependencies: [Package.Dependency] = [
 
 #if os(Linux) && compiler(>=6.3)
 packageDependencies += [
-    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.0.0")),
+    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.2.0")),
 ]
 #endif
 
@@ -54,7 +54,12 @@ var benchmarkDependencies: [Target.Dependency] = [
     .product(name: "Atomics", package: "swift-atomics"),
     "SwiftRuntimeHooks",
     "BenchmarkShared",
-    .product(name: "MallocInterposerSwift", package: "malloc-interposer"),
+    // Gated on the `Jemalloc` trait so that `--disable-default-traits` /
+    // BENCHMARK_DISABLE_JEMALLOC removes the malloc-stats backend entirely (needed for e.g.
+    // fully-static musl builds and sanitizer runs). On Swift 6.3+ this trait selects the
+    // interposer backend; on Swift <=6.2 (see Package@swift-6.2.swift) it selects jemalloc.
+    // When the trait is off, BenchmarkExecutor falls back to the no-op MallocStatsProducer stub.
+    .product(name: "MallocInterposerSwift", package: "malloc-interposer", condition: .when(traits: ["Jemalloc"])),
 ]
 
 #if os(Linux) && compiler(>=6.3)
