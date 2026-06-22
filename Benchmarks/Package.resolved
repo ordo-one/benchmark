@@ -56,6 +56,15 @@
       }
     },
     {
+      "identity" : "swift-runtime-interposer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ordo-one/swift-runtime-interposer.git",
+      "state" : {
+        "revision" : "7fd519fa3947bc8d29495f60fc8b6580ec361b5d",
+        "version" : "1.0.0"
+      }
+    },
+    {
       "identity" : "swift-system",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system",
