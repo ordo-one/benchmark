@@ -53,7 +53,7 @@ extension TimeUnits: ExpressibleByArgument {}
 
 @main
 struct Benchmark: AsyncParsableCommand {
-    static var configuration = CommandConfiguration(
+    static let configuration = CommandConfiguration(
         abstract: "Run benchmarks or update, compare or check performance baselines",
         usage: """
             swift package benchmark <command>

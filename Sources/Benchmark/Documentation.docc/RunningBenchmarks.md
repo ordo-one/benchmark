@@ -41,6 +41,7 @@ swift package benchmark <command verb> [<options>]
 - term `--no-progress`: Specifies that benchmark progress information should not be displayed
 - term `--check-absolute`: Set to true if thresholds should be checked against an absolute reference point rather than delta between baselines.
 - term `--grouping <grouping>`: The grouping to use, one of: ["metric", "benchmark"]. default is 'benchmark'
+- term `--benchmark-build-configuration <configuration>`: Build configuration to build the benchmark targets with, one of: ["debug", "release"]. Default is "release".
 
 ## Usage
 
@@ -116,11 +117,19 @@ This implicitly sets --check-absolute to true as well.
 
 ## Running benchmarks in Xcode and using Instruments for profiling benchmarks
 
-Profiling benchmarks or building the benchmarks in release mode in Xcode with jemalloc is currently not supported (as Xcode currently doesn't support interposition of the malloc library) and requires disabling jemalloc. 
+Profiling benchmarks or building the benchmarks in release mode in Xcode with jemalloc is currently not supported (as Xcode currently doesn't support interposition of the malloc library) and requires disabling jemalloc.
 
-Make sure Xcode is closed and then open it from the CLI with the `BENCHMARK_DISABLE_JEMALLOC` environment variable set e.g.:
+The `Jemalloc` support is controlled via a Swift Package Manager trait. To open Xcode with jemalloc disabled, make sure Xcode is closed and then open it from the CLI passing the `BENCHMARK_DISABLE_JEMALLOC` environment variable (supported by the Swift 5.x `Package@swift-5.9.swift` manifest):
+
 ```bash
 open --env BENCHMARK_DISABLE_JEMALLOC=true Package.swift
+```
+
+For Swift 6.1+ toolchains, use `--disable-default-traits` when building or testing from the command line instead:
+
+```bash
+swift build --disable-default-traits
+swift test --disable-default-traits
 ```
 
 This will disable the jemalloc dependency and you can simply build in Xcode for profiling and use Instruments as normal - including signpost information for the benchmark run.
@@ -135,7 +144,7 @@ E.g. for the target `BenchmarkDateTime`, you can run it manually with
 
 There are some additional options too that can be displayed with `--help`:
 ```
-hassila@max ~/G/package-benchmark (various-fixes)> .build/arm64-apple-macosx/release/BenchmarkDateTime --help
+hassila@max ~/G/benchmark (various-fixes)> .build/arm64-apple-macosx/release/BenchmarkDateTime --help
 USAGE: benchmark-runner [--quiet <quiet>] [--input-fd <input-fd>] [--output-fd <output-fd>] [--filter <filter> ...] [--skip <skip> ...] [--check-absolute]
 
 OPTIONS:
@@ -170,10 +179,10 @@ a backtrace for a bug report. E.g:
 > swift package benchmark --debug
 ...
 To debug, start BenchmarkTool in LLDB using:
-lldb /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/debug/BenchmarkTool
+lldb /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/debug/BenchmarkTool
 
 Then launch BenchmarkTool with:
-run --command run --baseline-storage-path /Users/hassila/GitHub/package-benchmark --format text --grouping benchmark --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/HistogramBenchmark --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/BenchmarkDateTime --benchmark-executable-paths /Users/hassila/GitHub/package-benchmark/.build/arm64-apple-macosx/release/Basic
+run --command run --baseline-storage-path /Users/hassila/GitHub/benchmark --format text --grouping benchmark --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/HistogramBenchmark --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/BenchmarkDateTime --benchmark-executable-paths /Users/hassila/GitHub/benchmark/.build/arm64-apple-macosx/release/Basic
 ```
 
 

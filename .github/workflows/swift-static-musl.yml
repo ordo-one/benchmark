@@ -1,0 +1,57 @@
+name: Static musl build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, next ]
+
+jobs:
+  build-static-musl:
+    name: Static SDK
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
+
+    steps:
+    - name: Install prerequisites
+      run: |
+        apt-get update -q
+        apt-get install -y -q curl jq tar git libjemalloc-dev linux-libc-dev
+
+    - name: Install Swift prerequisites
+      run: |
+        curl -s --retry 3 https://raw.githubusercontent.com/apple/swift-nio/main/scripts/install_swift_prerequisites.sh | bash
+
+    - name: Install Swift SDK
+      env:
+        INSTALL_SWIFT_VERSION: latest
+        INSTALL_SWIFT_ARCH: x86_64
+      run: |
+        curl -s --retry 3 https://raw.githubusercontent.com/apple/swift-nio/main/scripts/install_swift_sdk.sh | bash
+        hash -r
+
+    - uses: actions/checkout@v4
+
+    - name: Swift version
+      run: swift --version
+
+    - name: Add missing Linux kernel headers to musl SDK
+      run: |
+        MUSL_INCLUDE=$(find /tmp/swiftsdks -path "*/x86_64/usr/include" -type d | grep musl | head -1)
+        # Backup original musl linux headers, replace with system headers, restore musl originals
+        cp -r "$MUSL_INCLUDE/linux" /tmp/linux-musl-backup
+        rm -rf "$MUSL_INCLUDE/linux"
+        cp -r /usr/include/linux "$MUSL_INCLUDE/linux"
+        cp /tmp/linux-musl-backup/* "$MUSL_INCLUDE/linux/"
+        # Symlink asm and asm-generic folders
+        ln -s /usr/include/x86_64-linux-gnu/asm "$MUSL_INCLUDE/asm"
+        ln -s /usr/include/asm-generic "$MUSL_INCLUDE/asm-generic"
+
+    - name: Build with static musl SDK
+      env:
+        BENCHMARK_DISABLE_JEMALLOC: 1
+      run: |
+        swift build --swift-sdks-path /tmp/swiftsdks --swift-sdk x86_64-swift-linux-musl --disable-default-traits

@@ -1,12 +1,13 @@
 {
+  "originHash" : "f1d359a544b71b52c6788ad2e4cd2952f7f166b62ddb07316768f66be7ba4099",
   "pins" : [
     {
       "identity" : "hdrhistogram-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/HdrHistogram/hdrhistogram-swift",
       "state" : {
-        "revision" : "a69fa24d7b70421870cafa86340ece900489e17e",
-        "version" : "0.1.2"
+        "revision" : "c2e1210df04b4fff47e53f2f9dad9cc45ae15d63",
+        "version" : "0.2.0"
       }
     },
     {
@@ -73,5 +74,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

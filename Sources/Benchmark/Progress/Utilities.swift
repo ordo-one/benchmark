@@ -27,7 +27,11 @@
 //
 
 #if os(Linux)
+#if canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 #else
 import Darwin.C
 #endif

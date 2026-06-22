@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
-  
+
 jobs:
   benchmark-delta:
     timeout-minutes: 30
@@ -15,7 +15,7 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Homebrew Mac
@@ -57,8 +57,23 @@ jobs:
         continue-on-error: true
         run: |
           echo $(date) >> $GITHUB_STEP_SUMMARY
-          swift package ${BENCHMARK_PACKAGE_PATH} benchmark baseline check main pull_request --format markdown >> $GITHUB_STEP_SUMMARY
-          echo "exitStatus=$?" >> $GITHUB_ENV
+          swift package ${BENCHMARK_PACKAGE_PATH} benchmark baseline check main pull_request --format markdown >> $GITHUB_STEP_SUMMARY 2>benchmark_stderr
+          rawExitStatus=$?
+          cat benchmark_stderr >&2
+          # SwiftPM maps all non-zero plugin exit codes to 1, so parse stderr to recover the real status
+          if [ "$rawExitStatus" -eq 0 ]; then
+            echo "exitStatus=0" >> $GITHUB_ENV
+          elif grep -q "benchmarkThresholdImprovement" benchmark_stderr; then
+            echo "exitStatus=4" >> $GITHUB_ENV
+          elif grep -q "benchmarkThresholdRegression" benchmark_stderr; then
+            echo "exitStatus=2" >> $GITHUB_ENV
+          elif grep -q "benchmarkCrashed" benchmark_stderr; then
+            echo "exitStatus=3" >> $GITHUB_ENV
+          elif grep -q "baselineNotFound" benchmark_stderr; then
+            echo "exitStatus=5" >> $GITHUB_ENV
+          else
+            echo "exitStatus=$rawExitStatus" >> $GITHUB_ENV
+          fi
       - if: ${{ env.exitStatus == '0' }}
         name: Pull request comment text same
         run: |
@@ -98,4 +113,9 @@ jobs:
         if: ${{ success() || failure() }}
         run: |
           #/usr/bin/ordo-performance powersave
-          exit ${{ env.exitStatus }}
+          # Treat improvement (4) and same-as-baseline (0) as success
+          if [ "${{ env.exitStatus }}" = "0" ] || [ "${{ env.exitStatus }}" = "4" ]; then
+            exit 0
+          else
+            exit ${{ env.exitStatus }}
+          fi

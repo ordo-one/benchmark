@@ -1,53 +1,11 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 5.9
 
 import PackageDescription
 
 import class Foundation.ProcessInfo
 
-// If the environment variable BENCHMARK_DISABLE_JEMALLOC is set disable Jemalloc trait (backward compatibility)
-let disableJemalloc = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_JEMALLOC"] != nil
-
-let defaultTraits: Set<String>
-
-if disableJemalloc {
-    defaultTraits = []
-} else {
-    defaultTraits = ["Jemalloc"]
-}
-
-var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
-    .package(url: "https://github.com/apple/swift-argument-parser.git", .upToNextMajor(from: "1.6.0")),
-    .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
-    .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.4")),
-    .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
-    .package(url: "https://github.com/ordo-one/package-jemalloc.git", .upToNextMajor(from: "1.0.0")),
-]
-
-#if os(Linux) && compiler(>=6.3)
-packageDependencies += [
-    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.0.0")),
-]
-#endif
-
-var benchmarkDependencies: [Target.Dependency] = [
-    .product(name: "Histogram", package: "hdrhistogram-swift"),
-    .product(name: "ArgumentParser", package: "swift-argument-parser"),
-    .product(name: "SystemPackage", package: "swift-system"),
-    .byNameItem(name: "CDarwinOperatingSystemStats", condition: .when(platforms: [.macOS, .iOS])),
-    .byNameItem(name: "CLinuxOperatingSystemStats", condition: .when(platforms: [.linux])),
-    .product(name: "Atomics", package: "swift-atomics"),
-    "SwiftRuntimeHooks",
-    "BenchmarkShared",
-    .product(name: "jemalloc", package: "package-jemalloc", condition: .when(platforms: [.macOS, .linux], traits: ["Jemalloc"])),
-]
-
-#if os(Linux) && compiler(>=6.3)
-benchmarkDependencies += [
-    .product(name: "SwiftRuntimeInterposerC", package: "swift-runtime-interposer", condition: .when(platforms: [.linux])),
-    .product(name: "SwiftRuntimeInterposerSwift", package: "swift-runtime-interposer", condition: .when(platforms: [.linux])),
-]
-#endif
+// If the environment variable BENCHMARK_DISABLE_JEMALLOC is set, we'll build the package without Jemalloc support
+let disableJemalloc = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_JEMALLOC"]
 
 let package = Package(
     name: "Benchmark",
@@ -63,17 +21,14 @@ let package = Package(
             targets: ["Benchmark"]
         ),
     ],
-    traits: [
-        .trait(name: "Jemalloc"),
-        .default(enabledTraits: defaultTraits),
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", "1.1.0"..<"1.6.0"),
+        .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
+        .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.0")),
+        .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
     ],
-    dependencies: packageDependencies,
     targets: [
-        .target(
-            name: "Benchmark",
-            dependencies: benchmarkDependencies,
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
         // Plugins used by users of the package
 
         // The actual 'benchmark' command plugin
@@ -111,8 +66,7 @@ let package = Package(
                 "Benchmark",
                 "BenchmarkShared",
             ],
-            path: "Plugins/BenchmarkTool",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            path: "Plugins/BenchmarkTool"
         ),
 
         // Tool that generates the boilerplate
@@ -157,8 +111,50 @@ let package = Package(
 
         .testTarget(
             name: "BenchmarkTests",
-            dependencies: ["Benchmark"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["Benchmark"]
         ),
     ]
 )
+// Check if this is a SPI build, then we need to disable jemalloc for macOS
+
+let macOSSPIBuild: Bool // Disables jemalloc for macOS SPI builds as the infrastructure doesn't have jemalloc there
+
+#if canImport(Darwin)
+if let spiBuildEnvironment = ProcessInfo.processInfo.environment["SPI_BUILD"], spiBuildEnvironment == "1" {
+    macOSSPIBuild = true
+    print("Building for SPI@macOS, disabling Jemalloc")
+} else {
+    macOSSPIBuild = false
+}
+#else
+macOSSPIBuild = false
+#endif
+
+// Add Benchmark target dynamically
+
+// Shared dependencies
+var dependencies: [PackageDescription.Target.Dependency] = [
+    .product(name: "Histogram", package: "hdrhistogram-swift"),
+    .product(name: "ArgumentParser", package: "swift-argument-parser"),
+    .product(name: "SystemPackage", package: "swift-system"),
+    .byNameItem(name: "CDarwinOperatingSystemStats", condition: .when(platforms: [.macOS, .iOS])),
+    .byNameItem(name: "CLinuxOperatingSystemStats", condition: .when(platforms: [.linux])),
+    .product(name: "Atomics", package: "swift-atomics"),
+    "SwiftRuntimeHooks",
+    "BenchmarkShared",
+]
+
+if macOSSPIBuild == false { // jemalloc always disable for macOSSPIBuild
+    if let disableJemalloc, disableJemalloc != "false", disableJemalloc != "0" {
+        print("Jemalloc disabled through environment variable.")
+    } else {
+        package.dependencies += [
+            .package(url: "https://github.com/ordo-one/package-jemalloc.git", .upToNextMajor(from: "1.0.0"))
+        ]
+        dependencies += [
+            .product(name: "jemalloc", package: "package-jemalloc", condition: .when(platforms: [.macOS, .linux]))
+        ]
+    }
+}
+
+package.targets += [.target(name: "Benchmark", dependencies: dependencies)]

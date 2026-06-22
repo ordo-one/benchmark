@@ -12,21 +12,43 @@
 // Running the `BenchmarkTool` for each benchmark target.
 
 import PackagePlugin
+@preconcurrency import Foundation
 
 #if canImport(Darwin)
-import Darwin
+@preconcurrency import Darwin
 #elseif canImport(Glibc)
-import Glibc
+@preconcurrency import Glibc
+#elseif canImport(Musl)
+@preconcurrency import Musl
 #else
 #error("Unsupported Platform")
 #endif
 
 @available(macOS 13.0, *)
 @main struct BenchmarkCommandPlugin: CommandPlugin {
+    func writeToStderr(_ message: String) {
+        message.withCString { pointer in
+            _ = write(STDERR_FILENO, pointer, strlen(pointer))
+        }
+    }
+
     func withCStrings(_ strings: [String], scoped: ([UnsafeMutablePointer<CChar>?]) throws -> Void) rethrows {
         let cStrings = strings.map { strdup($0) }
         try scoped(cStrings + [nil])
         cStrings.forEach { free($0) }
+    }
+
+    func shouldEmitRuntimeInterposerWarning(outputFormat: OutputFormat, exportPath: String) -> Bool {
+        guard exportPath == "stdout" else {
+            return true
+        }
+
+        switch outputFormat {
+        case .text, .markdown:
+            return true
+        default:
+            return false
+        }
     }
 
     func performCommand(context: PluginContext, arguments: [String]) throws {
@@ -50,6 +72,7 @@ import Glibc
         let groupingToUse = argumentExtractor.extractOption(named: "grouping")
         let metricsToUse = argumentExtractor.extractOption(named: "metric")
         let timeUnits = argumentExtractor.extractOption(named: "time-units")
+        let benchmarkBuildConfiguration = argumentExtractor.extractOption(named: "benchmark-build-configuration")
         let debug = argumentExtractor.extractFlag(named: "debug")
         let scale = argumentExtractor.extractFlag(named: "scale")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
@@ -90,7 +113,7 @@ import Glibc
             print("")
             print(help)
             print("")
-            print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+            print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
             print("")
             exit(0)
         }
@@ -150,9 +173,41 @@ import Glibc
         let swiftSourceModuleTargets: [SwiftSourceModuleTarget]
         var shouldBuildTargets = true // We don't rebuild the targets when we dont need to execute them, e.g. baseline read/compare
 
-        let packageBenchmarkIdentifier = "package-benchmark"
+        // Accept both the new ("benchmark") and the legacy ("package-benchmark") package
+        // identifiers so consumers that still pin via the old GitHub URL continue to work.
+        let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
+
+        // Resolve which identifier this consumer actually has the benchmark package under,
+        // so generated boilerplate matches what SPM sees (depends on whether they pinned
+        // the old "package-benchmark" URL or the new "benchmark" URL).
+        let resolvedBenchmarkPackageIdentifier: String = {
+            if packageBenchmarkIdentifiers.contains(context.package.id) {
+                return context.package.id
+            }
+            if let dep = context.package.dependencies.first(where: {
+                packageBenchmarkIdentifiers.contains($0.package.id)
+            }) {
+                return dep.package.id
+            }
+            return "benchmark"
+        }()
+
+        if resolvedBenchmarkPackageIdentifier == "package-benchmark" {
+            print("")
+            print("\u{001B}[33mWarning: this project depends on the benchmark package using its legacy")
+            print("identifier 'package-benchmark'. The repository has been renamed; please update")
+            print("your Package.swift to use the new URL and identifier:")
+            print("")
+            print("  .package(url: \"https://github.com/ordo-one/benchmark\", ...)")
+            print("  .product(name: \"Benchmark\", package: \"benchmark\"),")
+            print("  .plugin(name: \"BenchmarkPlugin\", package: \"benchmark\"),")
+            print("")
+            print("Support for the legacy 'package-benchmark' identifier will be removed in a")
+            print("future release.\u{001B}[0m")
+            print("")
+        }
 
         var args: [String] = [
             benchmarkToolName,
@@ -160,6 +215,7 @@ import Glibc
             "--baseline-storage-path", context.package.directory.string,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
+            "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
         ]
 
         metricsToUse.forEach { metric in
@@ -250,7 +306,7 @@ import Glibc
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -330,7 +386,7 @@ import Glibc
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -386,15 +442,15 @@ import Glibc
         }
 
         let benchmarkToolModuleTargets: [SwiftSourceModuleTarget]
-        if context.package.id == packageBenchmarkIdentifier {
+        if packageBenchmarkIdentifiers.contains(context.package.id) {
             benchmarkToolModuleTargets = context.package.targets(ofType: SwiftSourceModuleTarget.self)
         } else {
             guard
                 let benchmarkPackage = context.package.dependencies.first(where: {
-                    $0.package.id == packageBenchmarkIdentifier
+                    packageBenchmarkIdentifiers.contains($0.package.id)
                 })
             else {
-                print("Benchmark failed to find the package-benchmark module.")
+                print("Benchmark failed to find the benchmark module.")
                 throw MyError.buildFailed
             }
             benchmarkToolModuleTargets = benchmarkPackage.package.targets(ofType: SwiftSourceModuleTarget.self)
@@ -439,6 +495,10 @@ import Glibc
         }
 
         benchmarkTool = tool.path
+        #if os(Linux) && compiler(>=6.3)
+        let swiftRuntimeInterposerLib = tool.path.removingLastComponent()
+            .appending(subpath: "libSwiftRuntimeInterposerC.so").string
+        #endif
 
         let filteredTargets =
             swiftSourceModuleTargets
@@ -454,14 +514,22 @@ import Glibc
                 skipTargets.first(where: { $0.name == benchmark.name }) == nil ? true : false
             }
 
+
+
+        let mode: PackageManager.BuildConfiguration = switch benchmarkBuildConfiguration.first {
+        case "debug": .debug
+        case "release", nil: .release
+        default: throw MyError.invalidArgument
+        }
+
         // Build the targets
         if outputFormat == .text {
             if quietRunning == 0 && shouldBuildTargets {
-                print("Building benchmark targets in release mode for benchmark run...")
+                print("Building benchmark targets in \(mode) mode for benchmark run...")
             }
         }
 
-        // Build targets in release mode
+        // Build targets
         try filteredTargets.forEach { target in
             args.append(contentsOf: ["--targets", target.name])
 
@@ -474,7 +542,7 @@ import Glibc
 
                 let buildResult = try packageManager.build(
                     .product(target.name), // .all(includingTests: false),
-                    parameters: .init(configuration: .release)
+                    parameters: .init(configuration: mode)
                 )
 
                 guard buildResult.succeeded else {

@@ -10,11 +10,16 @@
 
 import ArgumentParser
 import BenchmarkShared
+#if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+import SwiftRuntimeInterposerSwift
+#endif
 
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #else
 #error("Unsupported Platform")
 #endif
@@ -112,6 +117,9 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
 
         var debugIterator = Benchmark.benchmarks.makeIterator()
         var benchmarkCommand: BenchmarkCommandRequest
+        #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+        SwiftRuntimeInterposerSwift.initialize()
+        #endif
         let benchmarkExecutor = BenchmarkExecutor(quiet: quiet)
         var benchmark: Benchmark?
         var results: [BenchmarkResult] = []

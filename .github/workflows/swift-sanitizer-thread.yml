@@ -30,7 +30,7 @@ jobs:
         sudo apt-get install -y libjemalloc-dev
         echo BENCHMARK_DISABLE_JEMALLOC=true >> $GITHUB_ENV
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Start consul
       uses: ./.github/actions/consul-start
@@ -44,9 +44,9 @@ jobs:
 
     - name: Run thread sanitizer
       run: swift test --sanitize=thread
-      
+
     - name: Clean before release build sanitizier
       run: swift package clean
-      
+
     - name: Run thread sanitizer on release build
       run: swift test --sanitize=thread -c release -Xswiftc -enable-testing

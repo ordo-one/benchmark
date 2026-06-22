@@ -14,12 +14,22 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #else
 #error("Unsupported Platform")
 #endif
 
 // quiet swiftlint for now
 extension BenchmarkRunner {}
+
+private final class ARCBox {
+    let value: Int
+
+    init(_ value: Int) {
+        self.value = value
+    }
+}
 
 let benchmarks: @Sendable () -> Void = {
     var thresholdTolerances: [BenchmarkMetric: BenchmarkThresholds]
@@ -54,6 +64,23 @@ let benchmarks: @Sendable () -> Void = {
     }
 
     Benchmark("Noop2", configuration: .init(metrics: [.wallClock, .instructions] + .arc)) { _ in
+    }
+
+    Benchmark(
+        "ARCBox",
+        configuration: .init(
+            metrics: .arc + [.wallClock],
+            scalingFactor: .kilo
+        )
+    ) { benchmark in
+        for _ in benchmark.scaledIterations {
+            var boxes: [ARCBox] = []
+            boxes.reserveCapacity(16)
+            for value in 0..<16 {
+                boxes.append(ARCBox(value))
+            }
+            blackHole(boxes)
+        }
     }
 
     Benchmark(

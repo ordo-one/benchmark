@@ -8,19 +8,16 @@ on:
     branches: [ main, next ]
 jobs:
   test-code-coverage:
-    runs-on: [ubuntu-24.04]
+    runs-on: ubuntu-latest
+    container:
+      image: swift:latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - name: Ubuntu deps
-      if: ${{ runner.os == 'Linux' }}
+    - name: Install deps
       run: |
-        sudo apt-get install -y libjemalloc-dev
-
-    - uses: swift-actions/setup-swift@next
-      with:
-        swift-version: "6"
+        apt-get update -q && apt-get install -y -q libjemalloc-dev curl
 
     - name: Swift version
       run: swift --version
@@ -46,8 +43,8 @@ jobs:
          fi
 
     - name: Upload codecov
-      uses: codecov/codecov-action@v4
-      with: 
+      uses: codecov/codecov-action@v5
+      with:
         token: ${{ secrets.CODECOV_REPO_TOKEN }}
         files: info.lcov
         fail_ci_if_error: true

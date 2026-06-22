@@ -7,9 +7,9 @@ on:
 
 jobs:
   semantic-release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -52,13 +52,13 @@ jobs:
                 failTitle: false" > .releaserc.yml
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install semantic-release
         run: |
-          npm install semantic-release@v24 conventional-changelog-conventionalcommits@v8 -D
+          npm install semantic-release@v25 conventional-changelog-conventionalcommits@v9 -D
           npm list
       - name: Release
         env:

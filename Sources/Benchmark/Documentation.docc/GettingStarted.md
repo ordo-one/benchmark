@@ -16,17 +16,33 @@ After having done those, running your benchmarks are as simple as running `swift
 
 Benchmark requires Swift 5.7 support as it uses Regex and Duration types introduced with the `macOS 13` runtime, most versions of Linux will work as long as Swift 5.7+ is used. 
 
-Benchmark also by default depends on and uses the [jemalloc](https://jemalloc.net) memory allocation library, which is used by the Benchmark infrastructure to capture memory allocation statistics.
+Benchmark also by default depends on and uses the [jemalloc](https://jemalloc.net) memory allocation library, which is used by the Benchmark infrastructure to capture memory allocation statistics. This is controlled via a Swift Package Manager trait named `Jemalloc`, which is **enabled by default**.
 
-For platforms where `jemalloc` isn't available it's possible to build the Benchmark package without a `jemalloc` dependency by setting the environment variable BENCHMARK_DISABLE_JEMALLOC to any value except `false` or `0`.
+The Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics.
 
-E.g. to run the benchmark on the command line without memory allocation stats could look like:
+#### Disabling jemalloc (Swift 6.1+)
+
+For platforms where `jemalloc` isn't available (e.g. musl/static SDK builds, sanitizer builds, or Xcode profiling), disable the `Jemalloc` trait by passing `--disable-default-traits` to the Swift build, test, or package command:
+
+```bash
+swift build --disable-default-traits
+swift test --disable-default-traits
+swift package --disable-default-traits benchmark
+```
+
+If you depend on `benchmark` in your own package and want to disable jemalloc, you can opt out of the trait in your `Package.swift`:
+
+```swift
+.package(url: "https://github.com/ordo-one/benchmark.git", from: "...", traits: [])
+```
+
+#### Disabling jemalloc (Swift 5.x legacy)
+
+When using Swift 5.x toolchains (which use the `Package@swift-5.9.swift` manifest), jemalloc can still be disabled via the `BENCHMARK_DISABLE_JEMALLOC` environment variable:
 
 ```bash
 BENCHMARK_DISABLE_JEMALLOC=true swift package benchmark
 ```
-
-The Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics. 
 
 If you want to avoid adding the `jemalloc` dependency to your main project while still getting malloc statistics when benchmarking, the recommended approach is to embed a separate Swift project in a subdirectory that uses your project, then the dependency on `jemalloc` is contained to that subproject only.
 
@@ -69,7 +85,7 @@ echo /usr/local/lib > /etc/ld.so.conf.d/local_lib.conf && ldconfig
 To add the dependency on Benchmark, add a dependency to your package:
 
 ```swift
-.package(url: "https://github.com/ordo-one/package-benchmark", .upToNextMajor(from: "1.0.0")),
+.package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.0.0")),
 ```
 
 ### Add benchmark exectuable targets using `benchmark init`
@@ -100,7 +116,7 @@ The source for all benchmarks *must reside in a directory named `Benchmarks`* in
 
 The benchmark plugin uses this directory combined with the executable target information to automatically discover and run your benchmarks.
 
-For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from `package-benchmark`.
+For each executable target, include dependencies on both `Benchmark` (supporting framework) and `BenchmarkPlugin` (boilerplate generator) from `benchmark`.
 
 The following example shows an benchmark suite named `My-Benchmark` with the required dependency on `Benchmark` and the source files for the benchmark that reside in the directory `Benchmarks/My-Benchmark`:
 
@@ -108,8 +124,8 @@ The following example shows an benchmark suite named `My-Benchmark` with the req
 .executableTarget(
     name: "My-Benchmark",
     dependencies: [
-        .product(name: "Benchmark", package: "package-benchmark"),
-        .product(name: "BenchmarkPlugin", package: "package-benchmark"),
+        .product(name: "Benchmark", package: "benchmark"),
+        .product(name: "BenchmarkPlugin", package: "benchmark"),
     ],
     path: "Benchmarks/My-Benchmark"
 ),

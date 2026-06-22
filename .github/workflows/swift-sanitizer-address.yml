@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15]
+        os: [macos-26]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -29,7 +29,7 @@ jobs:
       run: |
         sudo apt-get install -y libjemalloc-dev
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Start consul
       uses: ./.github/actions/consul-start
@@ -43,9 +43,12 @@ jobs:
 
     - name: Run address sanitizer
       run: swift test --sanitize=address
-      
+
     - name: Clean before release build sanitizier
       run: swift package clean
-      
+
+    # Disable release tests now in package-frostflake as there's a bug in
+    # Swift Testing with release builds and argument parser and executable targets
     - name: Run address sanitizer on release build
+      if: github.repository != 'ordo-one/package-frostflake'
       run: swift test --sanitize=address -c release -Xswiftc -enable-testing

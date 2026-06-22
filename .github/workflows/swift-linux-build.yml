@@ -24,7 +24,7 @@ jobs:
       with:
         swift-version: ${{ matrix.swift }}
 
-    - uses: actions/checkout@v4    
+    - uses: actions/checkout@v6
 
     - name: Start consul
       uses: ./.github/actions/consul-start

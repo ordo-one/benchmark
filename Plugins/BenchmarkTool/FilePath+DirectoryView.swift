@@ -16,6 +16,9 @@ typealias DirectoryStreamPointer = UnsafeMutablePointer<DIR>?
 #elseif canImport(Glibc)
 import Glibc
 typealias DirectoryStreamPointer = OpaquePointer?
+#elseif canImport(Musl)
+import Musl
+typealias DirectoryStreamPointer = OpaquePointer?
 #else
 #error("Unsupported Platform")
 #endif

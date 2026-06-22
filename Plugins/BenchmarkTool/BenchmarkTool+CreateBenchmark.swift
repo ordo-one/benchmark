@@ -14,6 +14,8 @@ import SystemPackage
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #else
 #error("Unsupported Platform")
 #endif
@@ -34,11 +36,11 @@ extension BenchmarkTool {
                 .executableTarget(
                     name: "\(targetName)",
                     dependencies: [
-                        .product(name: "Benchmark", package: "package-benchmark"),
+                        .product(name: "Benchmark", package: "\(benchmarkPackageIdentifier)"),
                     ],
                     path: "Benchmarks/\(targetName)",
                     plugins: [
-                        .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+                        .plugin(name: "BenchmarkPlugin", package: "\(benchmarkPackageIdentifier)")
                     ]
                 ),
             ]
@@ -99,7 +101,7 @@ extension BenchmarkTool {
             import Benchmark
             import Foundation
 
-            let benchmarks = {
+            let benchmarks: @Sendable () -> Void = {
                 Benchmark("SomeBenchmark") { benchmark in
                     for _ in benchmark.scaledIterations {
                         blackHole(Date()) // replace this line with your own benchmark

@@ -6,19 +6,19 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main, next ]
-  
+
 jobs:
   build-macos:
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15]
+        os: [macos-26]
 #        swift: [ "5.10", "6.0" ]
 
     runs-on: ${{ matrix.os }}
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
     steps:
     - uses: swift-actions/setup-swift@v2
@@ -33,7 +33,7 @@ jobs:
         echo BENCHMARK_DISABLE_JEMALLOC=true >> $GITHUB_ENV
         brew install jemalloc
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Start consul
       uses: ./.github/actions/consul-start
@@ -51,7 +51,10 @@ jobs:
         if [ -d Tests ]; then
           swift test --parallel
         fi
+    # Disable release tests now in package-frostflake as there's a bug in
+    # Swift Testing with release builds and argument parser and executable targets
     - name: Run tests (release)
+      if: github.repository != 'ordo-one/package-frostflake'
       run: |
         if [ -d Tests ]; then
           swift test -c release --parallel

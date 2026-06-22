@@ -19,6 +19,8 @@ import SystemPackage
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #else
 #error("Unsupported Platform")
 #endif
@@ -64,6 +66,9 @@ struct BenchmarkTool: AsyncParsableCommand {
 
     @Option(name: .long, help: "The name of the new benchmark target to create")
     var targetName: String?
+
+    @Option(name: .long, help: "The SPM package identifier under which the benchmark package is depended on (used by `benchmark init`)")
+    var benchmarkPackageIdentifier: String = "benchmark"
 
     @Option(name: .long, help: "The operation to perform on the specified baselines")
     var baselineOperation: BaselineOperation?
@@ -382,6 +387,15 @@ struct BenchmarkTool: AsyncParsableCommand {
         var benchmarkResults: BenchmarkResults = [:]
         let fromChild = try FileDescriptor.pipe()
         let toChild = try FileDescriptor.pipe()
+
+        // Close the parent-side ends of the pipes whenever we return, regardless of how we exit, so we don't
+        // leak two file descriptors for every benchmark we run. (The child-side ends are closed separately,
+        // right after spawning, so the parent's reads see EOF when the child exits.)
+        defer {
+            try? toChild.writeEnd.close()
+            try? fromChild.readEnd.close()
+        }
+
         let path = FilePath(benchmarkPath)
         var args: [String] = [
             path.lastComponent!.description,
@@ -404,9 +418,9 @@ struct BenchmarkTool: AsyncParsableCommand {
         try withCStrings(args) { cArgs in
             var status = posix_spawn(&pid, path.string, nil, nil, cArgs, environ)
 
-            // Close child ends of the pipes
-            try toChild.readEnd.close()
-            try fromChild.writeEnd.close()
+            // Close child ends of the pipes (independently, so a failure closing one still closes the other)
+            try? toChild.readEnd.close()
+            try? fromChild.writeEnd.close()
 
             do {
                 switch benchmarkCommand {
