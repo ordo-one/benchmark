@@ -13,7 +13,6 @@
 
 @preconcurrency import Foundation
 import PackagePlugin
-@preconcurrency import Foundation
 
 #if canImport(Darwin)
 @preconcurrency import Darwin
@@ -552,10 +551,23 @@ import PackagePlugin
             }
 
             var environment = ProcessInfo.processInfo.environment
+            // Only preload libraries that were actually built. With the
+            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+            // exist; preloading a missing path makes ld.so fail every benchmark,
+            // so skip (and note) absent entries instead.
+            var preloadLibraries: [String] = []
+            for library in [swiftRuntimeInterposerLib, interposerLib] {
+                if FileManager.default.fileExists(atPath: library) {
+                    preloadLibraries.append(library)
+                } else {
+                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                }
+            }
             if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
-                environment["LD_PRELOAD"] = "\(swiftRuntimeInterposerLib):\(interposerLib):\(existingPreload)"
-            } else {
-                environment["LD_PRELOAD"] = "\(swiftRuntimeInterposerLib):\(interposerLib)"
+                preloadLibraries.append(existingPreload)
+            }
+            if preloadLibraries.isEmpty == false {
+                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
             }
 
             let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]

@@ -113,4 +113,26 @@ final class MallocStatisticsTests: XCTestCase {
         let indices = BenchmarkMetric.all.map(\.index)
         XCTAssertEqual(Set(indices).count, indices.count, "metric indices must be unique")
     }
+
+    /// Each backend produces a different malloc-metric family; requesting the other backend's
+    /// metric must be surfaced (it would otherwise be a silently-empty column / no-op gate).
+    func testUnsupportedBackendMetricsAreReported() {
+        #if canImport(MallocInterposerSwift)
+        let unsupported = BenchmarkExecutor.metricsUnsupportedByBackend(
+            [.wallClock, .allocatedResidentMemory, .memoryLeaked, .mallocBytesCount]
+        )
+        XCTAssertTrue(unsupported.contains(.allocatedResidentMemory))
+        XCTAssertTrue(unsupported.contains(.memoryLeaked))
+        XCTAssertFalse(unsupported.contains(.mallocBytesCount), "interposer backend produces mallocBytesCount")
+        XCTAssertFalse(unsupported.contains(.wallClock))
+        #else
+        let unsupported = BenchmarkExecutor.metricsUnsupportedByBackend(
+            [.wallClock, .allocatedResidentMemory, .mallocBytesCount, .mallocFreeDelta]
+        )
+        XCTAssertTrue(unsupported.contains(.mallocBytesCount))
+        XCTAssertTrue(unsupported.contains(.mallocFreeDelta))
+        XCTAssertFalse(unsupported.contains(.allocatedResidentMemory), "jemalloc backend produces allocatedResidentMemory")
+        XCTAssertFalse(unsupported.contains(.wallClock))
+        #endif
+    }
 }

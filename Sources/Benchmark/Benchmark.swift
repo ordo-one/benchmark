@@ -365,6 +365,15 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
                     )
                 }
             }
+
+        let unsupportedMetrics = BenchmarkExecutor.metricsUnsupportedByBackend(configuration.metrics)
+        if unsupportedMetrics.isEmpty == false {
+            print(
+                "Warning: benchmark `\(name)` requests metric(s) "
+                    + "\(unsupportedMetrics.map(\.description).joined(separator: ", ")) "
+                    + "that the active malloc backend does not produce; they will be omitted."
+            )
+        }
     }
 
     /// `measurement` registers custom metric measurements

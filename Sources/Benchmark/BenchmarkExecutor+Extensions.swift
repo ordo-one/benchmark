@@ -84,6 +84,25 @@ extension BenchmarkExecutor {
 }
 
 extension BenchmarkExecutor {
+    /// The subset of `metrics` that the active malloc backend cannot populate.
+    ///
+    /// Each backend produces a different malloc-metric family (the interposer has no resident-set
+    /// measurement; jemalloc has no free counter), so requesting the other backend's metric yields a
+    /// silently-empty column — and, worse, a no-op threshold gate. Callers warn on a non-empty result
+    /// so the omission is visible. Pure (no live backend) so it can be unit-tested.
+    static func metricsUnsupportedByBackend(_ metrics: [BenchmarkMetric]) -> [BenchmarkMetric] {
+        #if canImport(MallocInterposerSwift)
+        let unsupported: Set<BenchmarkMetric> = [.allocatedResidentMemory, .memoryLeaked]
+        #else
+        let unsupported: Set<BenchmarkMetric> = [
+            .freeCountTotal, .mallocBytesCount, .mallocFreeDelta, .memoryLeakedBytes,
+        ]
+        #endif
+        return metrics.filter { unsupported.contains($0) }
+    }
+}
+
+extension BenchmarkExecutor {
     func operatingSystemsStatsProducerNeeded(_ metric: BenchmarkMetric) -> Bool {
         switch metric {
         case .cpuUser:

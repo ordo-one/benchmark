@@ -33,19 +33,28 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     case peakMemoryVirtual
     /// Number of small malloc calls
     ///
-    /// The small/large split is backend-dependent: the jemalloc backend (Swift ≤6.2) splits on
-    /// jemalloc's size classes, while the 6.3+ interposer backend splits on a coarser
-    /// `requested size > page size` threshold.
+    /// Backend-dependent and **not directly comparable across backends**: the jemalloc backend
+    /// (Swift ≤6.2) splits on jemalloc's size classes, while the 6.3+ interposer backend splits on
+    /// a coarse fixed size threshold. Re-baseline malloc thresholds when crossing the 6.2/6.3
+    /// backend boundary.
     case mallocCountSmall
     /// Number of large malloc calls
     ///
     /// The backend-specific counterpart to ``mallocCountSmall``.
     case mallocCountLarge
     /// Number of total malloc calls
+    ///
+    /// Not directly comparable across backends: the interposer backend counts a realloc-grow as a
+    /// paired free + malloc, whereas the jemalloc backend derives the total from allocation
+    /// requests. Re-baseline when crossing the Swift 6.2/6.3 backend boundary.
     case mallocCountTotal
     /// Number of total free calls
     case freeCountTotal
-    /// The amount of memory allocated in bytes through malloc calls
+    /// The amount of memory allocated in bytes through malloc calls.
+    ///
+    /// Interposer backend: requested bytes for header-tracked allocations, and the allocator's
+    /// usable size for aligned/legacy allocations (posix_memalign / valloc / aligned_alloc), which
+    /// carry no header — so the gross total can read slightly high for aligned-heavy workloads.
     case mallocBytesCount
     /// Net unfreed allocation count within the measured region.
     ///
@@ -59,7 +68,10 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     /// > Deprecated: Only produced by the jemalloc backend (Swift ≤6.2). The 6.3+
     /// > interposer backend does not measure resident memory — use ``mallocBytesCount``
     /// > for gross allocated bytes, or ``peakMemoryResident`` for OS-sampled resident memory.
-    @available(*, deprecated, message: "Only produced by the jemalloc backend; use mallocBytesCount or peakMemoryResident")
+    ///
+    /// Note: not marked `@available(deprecated)` because the case is referenced by the
+    /// library's own platform-independent plumbing (the `.all` set, the metric index table,
+    /// argument parsing), which would emit unavoidable in-package deprecation warnings.
     case allocatedResidentMemory
     /// Legacy jemalloc resident-byte growth within the measured region.
     ///
