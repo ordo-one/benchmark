@@ -19,6 +19,13 @@ let mallocInterposerDependency: Package.Dependency = {
     )
 }()
 
+// The malloc interposer is enabled by default. Turn off the "MallocInterposer"
+// trait (or set BENCHMARK_DISABLE_MALLOC_INTERPOSER) to build without it:
+// allocations then avoid the interposer's per-allocation size header, at the
+// cost of the interposer-backed malloc metrics on Swift 6.3+.
+let disableMallocInterposer = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
+let defaultTraits: Set<String> = disableMallocInterposer ? [] : ["MallocInterposer"]
+
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
     .package(url: "https://github.com/apple/swift-argument-parser.git", .upToNextMajor(from: "1.6.0")),
@@ -43,7 +50,7 @@ var benchmarkDependencies: [Target.Dependency] = [
     .product(name: "Atomics", package: "swift-atomics"),
     "SwiftRuntimeHooks",
     "BenchmarkShared",
-    .product(name: "MallocInterposerSwift", package: "malloc-interposer"),
+    .product(name: "MallocInterposerSwift", package: "malloc-interposer", condition: .when(traits: ["MallocInterposer"])),
 ]
 
 #if os(Linux) && compiler(>=6.3)
@@ -74,6 +81,10 @@ let package = Package(
             name: "Benchmark",
             targets: ["Benchmark"]
         ),
+    ],
+    traits: [
+        .trait(name: "MallocInterposer"),
+        .default(enabledTraits: defaultTraits),
     ],
     dependencies: packageDependencies,
     targets: [
