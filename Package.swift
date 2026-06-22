@@ -23,8 +23,16 @@ let mallocInterposerDependency: Package.Dependency = {
 // trait (or set BENCHMARK_DISABLE_MALLOC_INTERPOSER) to build without it:
 // allocations then avoid the interposer's per-allocation size header, at the
 // cost of the interposer-backed malloc metrics on Swift 6.3+.
+//
+// The "RuntimeInterposer" trait similarly gates the Linux 6.3 ARC runtime
+// interposer. It is compiled out by `--disable-default-traits`, which the static
+// musl build uses — its strong swift_retain/release overrides otherwise collide
+// with the static libswiftCore at link time (duplicate symbols).
 let disableMallocInterposer = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
-let defaultTraits: Set<String> = disableMallocInterposer ? [] : ["MallocInterposer"]
+var defaultTraits: Set<String> = ["MallocInterposer", "RuntimeInterposer"]
+if disableMallocInterposer {
+    defaultTraits.remove("MallocInterposer")
+}
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
@@ -58,12 +66,12 @@ benchmarkDependencies += [
     .product(
         name: "SwiftRuntimeInterposerC",
         package: "swift-runtime-interposer",
-        condition: .when(platforms: [.linux])
+        condition: .when(platforms: [.linux], traits: ["RuntimeInterposer"])
     ),
     .product(
         name: "SwiftRuntimeInterposerSwift",
         package: "swift-runtime-interposer",
-        condition: .when(platforms: [.linux])
+        condition: .when(platforms: [.linux], traits: ["RuntimeInterposer"])
     ),
 ]
 #endif
@@ -84,6 +92,7 @@ let package = Package(
     ],
     traits: [
         .trait(name: "MallocInterposer"),
+        .trait(name: "RuntimeInterposer"),
         .default(enabledTraits: defaultTraits),
     ],
     dependencies: packageDependencies,

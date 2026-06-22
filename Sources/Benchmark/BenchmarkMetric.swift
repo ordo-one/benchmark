@@ -31,12 +31,12 @@ public enum BenchmarkMetric: Hashable, Equatable, Codable, CustomStringConvertib
     case peakMemoryResidentDelta
     /// Measure virtual memory usage - sampled during runtime
     case peakMemoryVirtual
-    /// Number of small malloc calls
+    /// Number of small malloc calls (requested size `<=` 16 KiB on the interposer backend).
     ///
     /// Backend-dependent and **not directly comparable across backends**: the jemalloc backend
     /// (Swift ≤6.2) splits on jemalloc's size classes, while the 6.3+ interposer backend splits on
-    /// a coarse fixed size threshold. Re-baseline malloc thresholds when crossing the 6.2/6.3
-    /// backend boundary.
+    /// a fixed 16 KiB threshold — a constant (rather than the page size) so the split is the same on
+    /// every architecture. Re-baseline malloc thresholds when crossing the 6.2/6.3 backend boundary.
     case mallocCountSmall
     /// Number of large malloc calls
     ///
