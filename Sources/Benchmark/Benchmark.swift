@@ -359,21 +359,16 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
         configuration.thresholds?
             .forEach { thresholdMetric, _ in
                 if self.configuration.metrics.contains(thresholdMetric) == false {
-                    print(
+                    writeToStandardError(
                         "Warning: Custom threshold tolerance defined for metric `\(thresholdMetric)` "
                             + "which isn't used by benchmark `\(name)`"
                     )
                 }
             }
 
-        let unsupportedMetrics = BenchmarkExecutor.metricsUnsupportedByBackend(configuration.metrics)
-        if unsupportedMetrics.isEmpty == false {
-            print(
-                "Warning: benchmark `\(name)` requests metric(s) "
-                    + "\(unsupportedMetrics.map(\.description).joined(separator: ", ")) "
-                    + "that the active malloc backend does not produce; they will be omitted."
-            )
-        }
+        // The unsupported-malloc-metric check runs in BenchmarkRunner *after* CLI `--metric`
+        // overrides are merged: the registered metric set here is not yet the effective one, and
+        // only there can a threshold on an unproducible metric be failed rather than silently passing.
     }
 
     /// `measurement` registers custom metric measurements

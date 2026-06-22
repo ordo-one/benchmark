@@ -24,11 +24,18 @@ let mallocInterposerDependency: Package.Dependency = {
 // allocations then avoid the interposer's per-allocation size header, at the
 // cost of the interposer-backed malloc metrics on Swift 6.3+.
 //
+// BENCHMARK_DISABLE_JEMALLOC is honored as a backward-compatible alias: it was
+// the opt-out on Swift <= 6.2 (where it dropped the jemalloc backend) and is
+// still set by existing CI jobs, the 6.2-vs-6.3 compare script, and downstream
+// users' scripts. Without the alias those would silently keep the interposer on.
+//
 // The "RuntimeInterposer" trait similarly gates the Linux 6.3 ARC runtime
 // interposer. It is compiled out by `--disable-default-traits`, which the static
 // musl build uses — its strong swift_retain/release overrides otherwise collide
 // with the static libswiftCore at link time (duplicate symbols).
-let disableMallocInterposer = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
+let environment = ProcessInfo.processInfo.environment
+let disableMallocInterposer = environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
+    || environment["BENCHMARK_DISABLE_JEMALLOC"] != nil
 var defaultTraits: Set<String> = ["MallocInterposer", "RuntimeInterposer"]
 if disableMallocInterposer {
     defaultTraits.remove("MallocInterposer")

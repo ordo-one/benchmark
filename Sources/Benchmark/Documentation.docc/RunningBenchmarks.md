@@ -118,12 +118,12 @@ This implicitly sets --check-absolute to true as well.
 
 ## Running benchmarks in Xcode and using Instruments for profiling benchmarks
 
-Profiling benchmarks or building the benchmarks in release mode in Xcode with jemalloc is currently not supported (as Xcode currently doesn't support interposition of the malloc library) and requires disabling jemalloc.
+Profiling benchmarks or building the benchmarks in release mode in Xcode with the malloc-statistics backend is currently not supported (Xcode doesn't support interposing the malloc library) and requires disabling that backend — the `MallocInterposer` trait on Swift 6.3+, or jemalloc on Swift 6.2 and 5.x.
 
-The `Jemalloc` support is controlled via a Swift Package Manager trait. To open Xcode with jemalloc disabled, make sure Xcode is closed and then open it from the CLI passing the `BENCHMARK_DISABLE_JEMALLOC` environment variable (supported by the Swift 5.x `Package@swift-5.9.swift` manifest):
+The malloc backend is controlled via a Swift Package Manager trait. To open Xcode with it disabled, make sure Xcode is closed and then open it from the CLI passing the matching environment variable — `BENCHMARK_DISABLE_MALLOC_INTERPOSER` on Swift 6.3+, or `BENCHMARK_DISABLE_JEMALLOC` on the Swift 5.x `Package@swift-5.9.swift` manifest (also honored as an alias on 6.3+):
 
 ```bash
-open --env BENCHMARK_DISABLE_JEMALLOC=true Package.swift
+open --env BENCHMARK_DISABLE_MALLOC_INTERPOSER=true Package.swift
 ```
 
 For Swift 6.1+ toolchains, use `--disable-default-traits` when building or testing from the command line instead:
@@ -133,7 +133,7 @@ swift build --disable-default-traits
 swift test --disable-default-traits
 ```
 
-This will disable the jemalloc dependency and you can simply build in Xcode for profiling and use Instruments as normal - including signpost information for the benchmark run.
+This will disable the active malloc backend (the interposer on Swift 6.3+, jemalloc on Swift 6.2) and you can simply build in Xcode for profiling and use Instruments as normal - including signpost information for the benchmark run.
 
 ## Troubleshooting problems
 If you have a benchmark that crashes, it's possible to run that specific benchmark in the debugger easily.

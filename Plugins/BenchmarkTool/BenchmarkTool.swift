@@ -392,6 +392,20 @@ struct BenchmarkTool: AsyncParsableCommand {
             "--quiet", noProgress.description,
         ]
 
+        // Machine-readable output to stdout shares fd 1 with the child, so a non-fatal metric
+        // warning printed by the child would corrupt it. Mirror `shouldEmitRuntimeInterposerWarning`
+        // and silence those warnings in that case (the child's fatal-metric abort is never silenced).
+        let machineOutputToStdout: Bool
+        switch format {
+        case .text, .markdown:
+            machineOutputToStdout = false
+        default:
+            machineOutputToStdout = self.path == "stdout"
+        }
+        if machineOutputToStdout {
+            args.append("--suppress-metric-warnings")
+        }
+
         if checkAbsolute {
             args.append("--check-absolute")
         }
