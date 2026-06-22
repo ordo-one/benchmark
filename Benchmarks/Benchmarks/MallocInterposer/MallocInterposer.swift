@@ -131,12 +131,9 @@ let benchmarks: @Sendable () -> Void = {
         }
     }
 
-    // C11 aligned_alloc — currently only intercepted on Linux. On Darwin the
-    // count drops because the symbol isn't in the DYLD_INTERPOSE list. Useful
-    // signal for that gap.
-    //   Expected per iter (Linux): malloc=1, free=1.
-    //   Expected per iter (Darwin): malloc=0 (not interposed), free=1.
-    #if !canImport(Darwin)
+    // C11 aligned_alloc — intercepted on both platforms since malloc-interposer
+    // 1.3.0 (Darwin via DYLD_INTERPOSE, Linux via the public override).
+    //   Expected per iter: malloc=1 (small=1, large=0), free=1.
     Benchmark("aligned_alloc(64, 1024) + free") { benchmark in
         for _ in benchmark.scaledIterations {
             let ptr = aligned_alloc(64, 1_024)
@@ -144,7 +141,6 @@ let benchmarks: @Sendable () -> Void = {
             free(ptr)
         }
     }
-    #endif
 
     // Batched mallocs in a single iteration — verifies the counter scales
     // linearly and isn't accidentally collapsed/de-duplicated.

@@ -15,7 +15,7 @@ let mallocInterposerDependency: Package.Dependency = {
     }
     return .package(
         url: "https://github.com/ordo-one/malloc-interposer.git",
-        .upToNextMajor(from: "1.0.0")
+        .upToNextMajor(from: "1.3.0")
     )
 }()
 
