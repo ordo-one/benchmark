@@ -92,6 +92,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The jemalloc install steps below are only needed when benchmarking with Swift 6.2 or
+      # earlier. On Swift 6.3+ the default malloc-interposer backend needs no system package.
       - name: Homebrew Mac
         if: ${{ runner.os == 'Macos' }}
         run: |

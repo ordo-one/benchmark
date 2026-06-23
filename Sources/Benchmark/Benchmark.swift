@@ -359,12 +359,16 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
         configuration.thresholds?
             .forEach { thresholdMetric, _ in
                 if self.configuration.metrics.contains(thresholdMetric) == false {
-                    print(
+                    writeToStandardError(
                         "Warning: Custom threshold tolerance defined for metric `\(thresholdMetric)` "
                             + "which isn't used by benchmark `\(name)`"
                     )
                 }
             }
+
+        // The unsupported-malloc-metric check runs in BenchmarkRunner *after* CLI `--metric`
+        // overrides are merged: the registered metric set here is not yet the effective one, and
+        // only there can a threshold on an unproducible metric be failed rather than silently passing.
     }
 
     /// `measurement` registers custom metric measurements

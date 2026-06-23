@@ -77,3 +77,20 @@ package.targets += [
         ]
     )
 ]
+
+// Regression coverage for the malloc interposer: predictable allocation
+// patterns (counts known per iteration) so any drift between jemalloc and
+// interposer code paths is immediately visible in mallocCountTotal /
+// freeCountTotal / mallocFreeDelta / memoryLeakedBytes.
+package.targets += [
+    .executableTarget(
+        name: "MallocInterposerBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/MallocInterposer",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
