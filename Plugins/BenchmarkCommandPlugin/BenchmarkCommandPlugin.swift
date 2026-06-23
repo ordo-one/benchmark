@@ -173,7 +173,7 @@ import PackagePlugin
         // identifiers so consumers that still pin via the old GitHub URL continue to work.
         let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
-        let benchmarkTool: URL // = try context.tool(named: benchmarkToolName)
+        let benchmarkTool: String // = try context.tool(named: benchmarkToolName)
         let interposerLib: String
 
         // Resolve which identifier this consumer actually has the benchmark package under,
@@ -206,10 +206,18 @@ import PackagePlugin
             print("")
         }
 
+        // PackagePlugin's `Path` API was deprecated in favor of Foundation `URL`
+        // starting with the 6.x tools-version; older toolchains only have `Path`.
+        #if compiler(>=6.1)
+        let packageDirectory = context.package.directoryURL.path(percentEncoded: false)
+        #else
+        let packageDirectory = context.package.directory.string
+        #endif
+
         var args: [String] = [
             benchmarkToolName,
             "--command", commandToPerform.rawValue,
-            "--baseline-storage-path", context.package.directoryURL.path(percentEncoded: false),
+            "--baseline-storage-path", packageDirectory,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
             "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
@@ -447,27 +455,40 @@ import PackagePlugin
         }
 
         let tool = buildResult.builtArtifacts.first(where: {
-            $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
+            #if compiler(>=6.1)
+            return $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
+            #else
+            return $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
+            #endif
         })
 
         guard let tool else {
             throw MyError.buildFailed
         }
 
-        benchmarkTool = tool.url
-        interposerLib = tool.url.deletingLastPathComponent()
-            .appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
+        #if compiler(>=6.1)
+        let toolDirectory = tool.url.deletingLastPathComponent()
+        benchmarkTool = tool.url.path(percentEncoded: false)
+        interposerLib = toolDirectory.appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
+        #else
+        let toolDirectory = tool.path.removingLastComponent()
+        benchmarkTool = tool.path.string
+        interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
+        #endif
         #if os(Linux) && compiler(>=6.3)
-        let swiftRuntimeInterposerLib = tool.url.deletingLastPathComponent()
-            .appending(subpath: "libSwiftRuntimeInterposerSwift.so").string
+        let swiftRuntimeInterposerLib = toolDirectory
+            .appending(subpath: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
         #endif
 
         let filteredTargets =
             swiftSourceModuleTargets
             .filter { $0.kind == .executable }
             .filter { benchmark in
-                let directory = benchmark.directoryURL.deletingLastPathComponent()
-                return directory.lastPathComponent == "Benchmarks" ? true : false
+                #if compiler(>=6.1)
+                return benchmark.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
+                #else
+                return benchmark.directory.removingLastComponent().lastComponent == "Benchmarks"
+                #endif
             }
             .filter { benchmark in
                 swiftSourceModuleTargets.first(where: { $0.name == benchmark.name }) != nil ? true : false
@@ -516,7 +537,11 @@ import PackagePlugin
                 // Filter out all executable products which are Benchmarks we should run
                 let benchmarks = buildResult.builtArtifacts
                     .filter { benchmark in
+                        #if compiler(>=6.1)
                         filteredTargets.first(where: { $0.name == benchmark.url.lastPathComponent }) != nil ? true : false
+                        #else
+                        filteredTargets.first(where: { $0.name == benchmark.path.lastComponent }) != nil ? true : false
+                        #endif
                     }
 
                 if benchmarks.isEmpty {
@@ -524,7 +549,11 @@ import PackagePlugin
                 }
 
                 benchmarks.forEach { benchmark in
+                    #if compiler(>=6.1)
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.url.path(percentEncoded: false)])
+                    #else
+                    args.append(contentsOf: ["--benchmark-executable-paths", benchmark.path.string])
+                    #endif
                 }
             }
         }
@@ -534,7 +563,7 @@ import PackagePlugin
         try withCStrings(args) { cArgs in
             if debug > 0 {
                 print("To debug, start \(benchmarkToolName) in LLDB using:")
-                print("lldb \(benchmarkTool.path(percentEncoded: false))")
+                print("lldb \(benchmarkTool)")
                 print("")
                 print("Then launch \(benchmarkToolName) with:")
                 print("run \(args.dropFirst().joined(separator: " "))")
@@ -579,10 +608,10 @@ import PackagePlugin
             }
 
             var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.path(percentEncoded: false), nil, nil, cArgs, envp)
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, envp)
             #else
             var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.path(percentEncoded: false), nil, nil, cArgs, environ)
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, environ)
             #endif
 
             if status == 0 {
