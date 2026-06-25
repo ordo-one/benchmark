@@ -584,34 +584,7 @@ import PackagePlugin
                         )
                     }
                 }
-            // On Linux we need to set LD_PRELOAD to get the malloc interposer working
-            // while on Darwin this is done with DYLD interpose mechanism
-            #if os(Linux) && compiler(>=6.3)
-            if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
-                writeToStderr(
-                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
-                )
-            }
 
-            var environment = ProcessInfo.processInfo.environment
-            // Only preload libraries that were actually built. With the
-            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
-            // exist; preloading a missing path makes ld.so fail every benchmark,
-            // so skip (and note) absent entries instead.
-            var preloadLibraries: [String] = []
-            for library in [swiftRuntimeInterposerLib, interposerLib] {
-                if FileManager.default.fileExists(atPath: library) {
-                    preloadLibraries.append(library)
-                } else {
-                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
-                }
-            }
-            if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
-                preloadLibraries.append(existingPreload)
-            }
-            if preloadLibraries.isEmpty == false {
-                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
-            }
                 return Result<Void, Error> {
                     try withCStrings(args) { cArgs in
                         /// We'll decrement this in the success path
@@ -628,7 +601,47 @@ import PackagePlugin
                         }
 
                         var pid: pid_t = 0
+
+                        // On Linux we need to set LD_PRELOAD to get the malloc interposer working
+                        // while on Darwin this is done with DYLD interpose mechanism
+                        #if os(Linux) && compiler(>=6.3)
+                        if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
+                            writeToStderr(
+                                "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
+                            )
+                        }
+
+                        var environment = ProcessInfo.processInfo.environment
+                        // Only preload libraries that were actually built. With the
+                        // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+                        // exist; preloading a missing path makes ld.so fail every benchmark,
+                        // so skip (and note) absent entries instead.
+                        var preloadLibraries: [String] = []
+                        for library in [swiftRuntimeInterposerLib, interposerLib] {
+                            if FileManager.default.fileExists(atPath: library) {
+                                preloadLibraries.append(library)
+                            } else {
+                                writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                            }
+                        }
+                        if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
+                            preloadLibraries.append(existingPreload)
+                        }
+                        if preloadLibraries.isEmpty == false {
+                            environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
+                        }
+
+                        let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]
+                        defer {
+                            for i in 0..<envp.count - 1 {
+                                free(envp[i])
+                            }
+                        }
+
+                        var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, envp)
+                        #else
                         var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, environ)
+                        #endif
 
                         if status == 0 {
                             if waitpid(pid, &status, 0) != -1 {
@@ -705,17 +718,17 @@ import PackagePlugin
             throw MyError.benchmarkCrashed
         }
     }
+}
 
-    enum MyError: Int32, Error {
-        case successs = 0
-        case benchmarkUnexpectedReturnCode = 1
-        case benchmarkThresholdRegression = 2
-        case benchmarkCrashed = 3
-        case benchmarkThresholdImprovement = 4
-        case baselineNotFound = 5
-        case noPermissions = 6
-        case invalidArgument = 101
-        case buildFailed = 102
-        case unknownFailure = 103
-    }
+enum MyError: Int32, Error {
+    case successs = 0
+    case benchmarkUnexpectedReturnCode = 1
+    case benchmarkThresholdRegression = 2
+    case benchmarkCrashed = 3
+    case benchmarkThresholdImprovement = 4
+    case baselineNotFound = 5
+    case noPermissions = 6
+    case invalidArgument = 101
+    case buildFailed = 102
+    case unknownFailure = 103
 }
