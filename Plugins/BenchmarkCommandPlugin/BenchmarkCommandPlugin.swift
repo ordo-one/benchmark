@@ -11,8 +11,8 @@
 // 'Benchmark' plugin that is responsible for gathering command line arguments and then
 // Running the `BenchmarkTool` for each benchmark target.
 
-import PackagePlugin
 @preconcurrency import Foundation
+import PackagePlugin
 
 #if canImport(Darwin)
 @preconcurrency import Darwin
@@ -178,6 +178,7 @@ import PackagePlugin
         let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
         let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
+        let interposerLib: String
 
         // Resolve which identifier this consumer actually has the benchmark package under,
         // so generated boilerplate matches what SPM sees (depends on whether they pinned
@@ -457,10 +458,7 @@ import PackagePlugin
         }
 
         // Build the BenchmarkTool manually in release mode to work around https://github.com/apple/swift-package-manager/issues/7210
-        guard
-            let benchmarkToolModule = benchmarkToolModuleTargets.first(where: {
-                $0.kind == .executable && $0.name == benchmarkToolName
-            })
+        guard let benchmarkToolModule = benchmarkToolModuleTargets.first(where: { $0.kind == .executable && $0.name == benchmarkToolName })
         else {
             print("Benchmark failed to find the BenchmarkTool target.")
             throw MyError.buildFailed
@@ -495,6 +493,7 @@ import PackagePlugin
         }
 
         benchmarkTool = tool.path
+        interposerLib = tool.path.removingLastComponent().appending(subpath: "libMallocInterposerSwift.so").string
         #if os(Linux) && compiler(>=6.3)
         let swiftRuntimeInterposerLib = tool.path.removingLastComponent()
             .appending(subpath: "libSwiftRuntimeInterposerC.so").string
@@ -585,7 +584,34 @@ import PackagePlugin
                         )
                     }
                 }
+            // On Linux we need to set LD_PRELOAD to get the malloc interposer working
+            // while on Darwin this is done with DYLD interpose mechanism
+            #if os(Linux) && compiler(>=6.3)
+            if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
+                writeToStderr(
+                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
+                )
+            }
 
+            var environment = ProcessInfo.processInfo.environment
+            // Only preload libraries that were actually built. With the
+            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+            // exist; preloading a missing path makes ld.so fail every benchmark,
+            // so skip (and note) absent entries instead.
+            var preloadLibraries: [String] = []
+            for library in [swiftRuntimeInterposerLib, interposerLib] {
+                if FileManager.default.fileExists(atPath: library) {
+                    preloadLibraries.append(library)
+                } else {
+                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                }
+            }
+            if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
+                preloadLibraries.append(existingPreload)
+            }
+            if preloadLibraries.isEmpty == false {
+                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
+            }
                 return Result<Void, Error> {
                     try withCStrings(args) { cArgs in
                         /// We'll decrement this in the success path

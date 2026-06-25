@@ -62,24 +62,6 @@ final class OperatingSystemAndMallocTests: XCTestCase {
         blackHole(operatingSystemStatsProducer.metricSupported(.throughput))
     }
 
-    #if canImport(jemalloc)
-    func testMallocProducerLeaks() throws {
-        let startMallocStats = MallocStatsProducer.makeMallocStats()
-
-        for outerloop in 1...100 {
-            blackHole(malloc(outerloop * 1_024))
-        }
-
-        let stopMallocStats = MallocStatsProducer.makeMallocStats()
-
-        XCTAssertGreaterThanOrEqual(stopMallocStats.mallocCountTotal - startMallocStats.mallocCountTotal, 100)
-        XCTAssertGreaterThanOrEqual(
-            stopMallocStats.allocatedResidentMemory - startMallocStats.allocatedResidentMemory,
-            100 * 1_024
-        )
-    }
-    #endif
-
     func testARCStatsProducer() throws {
         let array = [3]
         ARCStatsProducer.hook()

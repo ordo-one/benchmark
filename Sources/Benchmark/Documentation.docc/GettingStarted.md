@@ -6,7 +6,7 @@ Before creating your own benchmarks, you must install the required prerequisites
 
 There are three steps that needs to be performed to get up and running with your own benchmarks:
 
-* Install prerequisite dependencies if needed (currently that's only `jemalloc`) 
+* Install prerequisite dependencies if needed (only on Swift 6.2 and earlier, where the malloc-statistics backend is `jemalloc`; on Swift 6.3+ the default backend is the `malloc-interposer` package and there is nothing to install)
 * Add a dependency on Benchmark to your `Package.swift` file
 * Add one or more benchmark executable targets to the top level `Benchmarks/` directory for auto discovery
 
@@ -16,13 +16,15 @@ After having done those, running your benchmarks are as simple as running `swift
 
 Benchmark requires Swift 5.7 support as it uses Regex and Duration types introduced with the `macOS 13` runtime, most versions of Linux will work as long as Swift 5.7+ is used. 
 
-Benchmark also by default depends on and uses the [jemalloc](https://jemalloc.net) memory allocation library, which is used by the Benchmark infrastructure to capture memory allocation statistics. This is controlled via a Swift Package Manager trait named `Jemalloc`, which is **enabled by default**.
+On Swift 6.3+ Benchmark by default depends on and uses a custom malloc interposer (the [malloc-interposer](https://github.com/ordo-one/malloc-interposer) package) to capture memory allocation statistics. This is controlled via a Swift Package Manager trait named `MallocInterposer`, which is **enabled by default** and requires no system installation — it is fetched as a package dependency.
 
-The Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics.
+On Swift 6.2 and 5.x toolchains the backend is instead the [jemalloc](https://jemalloc.net) memory allocation library, controlled via a trait named `Jemalloc` (also enabled by default).
 
-#### Disabling jemalloc (Swift 6.1+)
+On Swift 6.2 and 5.x toolchains the Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics (see below). On Swift 6.3+ no installation is needed.
 
-For platforms where `jemalloc` isn't available (e.g. musl/static SDK builds, sanitizer builds, or Xcode profiling), disable the `Jemalloc` trait by passing `--disable-default-traits` to the Swift build, test, or package command:
+#### Disabling the malloc backend (Swift 6.1+)
+
+For platforms where the malloc backend isn't available or wanted (e.g. musl/static SDK builds, sanitizer builds, or Xcode profiling), disable the relevant default trait by passing `--disable-default-traits` to the Swift build, test, or package command. This drops the `MallocInterposer` trait on Swift 6.3+ and the `Jemalloc` trait on Swift 6.1/6.2:
 
 ```bash
 swift build --disable-default-traits
@@ -30,21 +32,25 @@ swift test --disable-default-traits
 swift package --disable-default-traits benchmark
 ```
 
-If you depend on `benchmark` in your own package and want to disable jemalloc, you can opt out of the trait in your `Package.swift`:
+If you depend on `benchmark` in your own package and want to disable the malloc backend, you can opt out of the default traits in your `Package.swift`:
 
 ```swift
 .package(url: "https://github.com/ordo-one/benchmark.git", from: "...", traits: [])
 ```
 
-#### Disabling jemalloc (Swift 5.x legacy)
+On Swift 6.3+ you can equivalently set the `BENCHMARK_DISABLE_MALLOC_INTERPOSER` environment variable (the older `BENCHMARK_DISABLE_JEMALLOC` is still honored as an alias).
 
-When using Swift 5.x toolchains (which use the `Package@swift-5.9.swift` manifest), jemalloc can still be disabled via the `BENCHMARK_DISABLE_JEMALLOC` environment variable:
+#### Disabling jemalloc (Swift 6.2 and 5.x)
+
+When using Swift 6.2 or 5.x toolchains (which use the `Package@swift-6.2.swift` / `Package@swift-5.9.swift` manifests), jemalloc can be disabled via the `BENCHMARK_DISABLE_JEMALLOC` environment variable:
 
 ```bash
 BENCHMARK_DISABLE_JEMALLOC=true swift package benchmark
 ```
 
 If you want to avoid adding the `jemalloc` dependency to your main project while still getting malloc statistics when benchmarking, the recommended approach is to embed a separate Swift project in a subdirectory that uses your project, then the dependency on `jemalloc` is contained to that subproject only.
+
+> The `jemalloc` installation steps below are only required on Swift 6.2 and earlier. On Swift 6.3+ the default `malloc-interposer` backend needs no system installation.
 
 #### Installing `jemalloc` on macOS
 

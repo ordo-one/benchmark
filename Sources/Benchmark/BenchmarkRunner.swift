@@ -10,6 +10,9 @@
 
 import ArgumentParser
 import BenchmarkShared
+#if canImport(MallocInterposerSwift)
+import MallocInterposerSwift
+#endif
 #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
 import SwiftRuntimeInterposerSwift
 #endif
@@ -82,6 +85,15 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
     @Flag(name: .shortAndLong, help: "True if we should run the benchmarks for all metrics.")
     var allMetrics = false
 
+    @Flag(
+        name: .long,
+        help: """
+            Suppress non-fatal metric warnings. The host sets this when machine-readable output is \
+            written to stdout, where a warning line would corrupt it. Fatal metric errors are still reported.
+            """
+    )
+    var suppressMetricWarnings = false
+
     var debug = false
 
     func shouldRunBenchmark(_ name: String) throws -> Bool {
@@ -117,6 +129,9 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
 
         var debugIterator = Benchmark.benchmarks.makeIterator()
         var benchmarkCommand: BenchmarkCommandRequest
+        #if canImport(MallocInterposerSwift)
+        MallocInterposerSwift.initialize()
+        #endif
         #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
         SwiftRuntimeInterposerSwift.initialize()
         #endif
@@ -178,6 +193,34 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
 
                     if debug, allMetrics {
                         benchmark.configuration.metrics = .all
+                    }
+
+                    // Re-check unsupported metrics now that CLI `--metric` overrides are merged: a
+                    // metric the active malloc backend can't produce yields an empty column. If a
+                    // threshold is defined for it the gate would silently pass, so fail loudly;
+                    // otherwise warn (to stderr, never stdout — it shares fd 1 with `--path stdout`).
+                    let unsupportedMetrics =
+                        BenchmarkExecutor.metricsUnsupportedByBackend(benchmark.configuration.metrics)
+                    if unsupportedMetrics.isEmpty == false {
+                        let gatedMetrics = unsupportedMetrics.filter {
+                            benchmark.configuration.thresholds?[$0] != nil
+                        }
+                        if gatedMetrics.isEmpty == false {
+                            try channel.write(.error(
+                                "Benchmark `\(benchmark.name)` defines threshold(s) on metric(s) "
+                                    + "\(gatedMetrics.map(\.description).joined(separator: ", ")) that the "
+                                    + "active malloc backend does not produce; the threshold check would "
+                                    + "silently pass. Aborting — remove the metric or run the matching backend."
+                            ))
+                            return
+                        }
+                        if suppressMetricWarnings == false {
+                            writeToStandardError(
+                                "Warning: benchmark `\(benchmark.name)` requests metric(s) "
+                                    + "\(unsupportedMetrics.map(\.description).joined(separator: ", ")) "
+                                    + "that the active malloc backend does not produce; they will be omitted."
+                            )
+                        }
                     }
 
                     benchmark.target = benchmarkToRun.target
