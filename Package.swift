@@ -51,8 +51,21 @@ var packageDependencies: [Package.Dependency] = [
 ]
 
 #if os(Linux) && compiler(>=6.3)
+// RUNTIME_INTERPOSER_LOCAL_PATH mirrors MALLOC_INTERPOSER_LOCAL_PATH: point it
+// at a local checkout of swift-runtime-interposer to iterate on the interposer
+// alongside this package.
 packageDependencies += [
-    .package(url: "https://github.com/ordo-one/swift-runtime-interposer.git", .upToNextMajor(from: "1.0.0"))
+    {
+        if let localPath = ProcessInfo.processInfo.environment["RUNTIME_INTERPOSER_LOCAL_PATH"],
+            localPath.isEmpty == false
+        {
+            return .package(path: localPath)
+        }
+        return .package(
+            url: "https://github.com/ordo-one/swift-runtime-interposer.git",
+            .upToNextMajor(from: "2.0.0")
+        )
+    }()
 ]
 #endif
 
@@ -70,11 +83,6 @@ var benchmarkDependencies: [Target.Dependency] = [
 
 #if os(Linux) && compiler(>=6.3)
 benchmarkDependencies += [
-    .product(
-        name: "SwiftRuntimeInterposerC",
-        package: "swift-runtime-interposer",
-        condition: .when(platforms: [.linux], traits: ["RuntimeInterposer"])
-    ),
     .product(
         name: "SwiftRuntimeInterposerSwift",
         package: "swift-runtime-interposer",
