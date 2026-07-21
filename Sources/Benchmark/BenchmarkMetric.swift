@@ -571,4 +571,16 @@ public extension BenchmarkMetric {
     }
 }
 
+/// `CodingKeyRepresentable` conformance enables Codable to encode/decode a dictionary with keys of
+/// type `BenchmarkMetric`, as if the key type was `String` and not `BenchmarkMetric`.
+extension BenchmarkMetric: CodingKeyRepresentable {
+    public var codingKey: any CodingKey {
+        self.rawDescription.codingKey
+    }
+
+    public init?<T>(codingKey: T) where T: CodingKey {
+        self.init(argument: codingKey.stringValue)
+    }
+}
+
 // swiftlint:enable cyclomatic_complexity function_body_length

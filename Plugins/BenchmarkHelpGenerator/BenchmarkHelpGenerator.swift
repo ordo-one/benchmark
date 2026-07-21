@@ -157,6 +157,42 @@ struct Benchmark: AsyncParsableCommand {
     )
     var checkAbsolute = false
 
+    @Flag(
+        name: .long,
+        help: """
+            Specifies that thresholds check command should skip loading benchmark targets.
+            Use this flag to skip unnecessary building of benchmark targets and loading of benchmark results, to save time.
+            This flag is specially useful when combined with static threshold files that contain the newly supported relative or range thresholds.
+            With such a set up, you'll save the time needed to build the benchmark targets and the thresholds check operation
+            will only read the threshold tolerance values from the static files.
+            """
+    )
+    var skipLoadingBenchmarks = false
+
+    @Option(
+        name: .long,
+        help: """
+            The number of times to run each benchmark in thresholds update operation.
+            This is only valid when --relative or --range are also specified.
+            When combined with --relative or --range flags, this option will run the benchmarks multiple times to calculate
+            relative or range thresholds, and each time it'll widen the threshold tolerances according to the new result.
+            Defaults to 1.
+            """
+    )
+    var runCount: Int?
+
+    @Flag(
+        name: .long,
+        help: "Specifies that thresholds update command should output relative thresholds to the static files."
+    )
+    var relative = false
+
+    @Flag(
+        name: .long,
+        help: "Specifies that thresholds update command should output min-max range thresholds to the static files."
+    )
+    var range = false
+
     @Option(
         name: .long,
         help:

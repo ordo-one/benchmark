@@ -34,7 +34,7 @@ extension JMHPrimaryMetric {
         let factor = result.metric.countable == false ? 1_000 : 1
 
         for p in percentiles {
-            percentileValues[String(p)] = Statistics.roundToDecimalplaces(
+            percentileValues[String(p)] = Statistics.roundToDecimalPlaces(
                 Double(histogram.valueAtPercentile(p)) / Double(factor),
                 3
             )
@@ -42,15 +42,15 @@ extension JMHPrimaryMetric {
 
         for value in histogram.recordedValues() {
             for _ in 0..<value.count {
-                recordedValues.append(Statistics.roundToDecimalplaces(Double(value.value) / Double(factor), 3))
+                recordedValues.append(Statistics.roundToDecimalPlaces(Double(value.value) / Double(factor), 3))
             }
         }
 
-        self.score = Statistics.roundToDecimalplaces(score / Double(factor), 3)
-        scoreError = Statistics.roundToDecimalplaces(error / Double(factor), 3)
+        self.score = Statistics.roundToDecimalPlaces(score / Double(factor), 3)
+        scoreError = Statistics.roundToDecimalPlaces(error / Double(factor), 3)
         scoreConfidence = [
-            Statistics.roundToDecimalplaces(score - error) / Double(factor),
-            Statistics.roundToDecimalplaces(score + error) / Double(factor),
+            Statistics.roundToDecimalPlaces(score - error) / Double(factor),
+            Statistics.roundToDecimalPlaces(score + error) / Double(factor),
         ]
         scorePercentiles = percentileValues
         if result.metric.countable {

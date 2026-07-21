@@ -63,8 +63,12 @@ import PackagePlugin
         let quietRunning = argumentExtractor.extractFlag(named: "quiet")
         let noProgress = argumentExtractor.extractFlag(named: "no-progress")
         let checkAbsoluteThresholdsPath = argumentExtractor.extractOption(named: "check-absolute-path")
+        let skipLoadingBenchmarks = argumentExtractor.extractFlag(named: "skip-loading-benchmark-targets")
         let checkAbsoluteThresholds =
             checkAbsoluteThresholdsPath.count > 0 ? 1 : argumentExtractor.extractFlag(named: "check-absolute")
+        let runCount = argumentExtractor.extractOption(named: "run-count")
+        let relative = argumentExtractor.extractFlag(named: "relative")
+        let range = argumentExtractor.extractFlag(named: "range")
         let groupingToUse = argumentExtractor.extractOption(named: "grouping")
         let metricsToUse = argumentExtractor.extractOption(named: "metric")
         let timeUnits = argumentExtractor.extractOption(named: "time-units")
@@ -290,6 +294,8 @@ import PackagePlugin
             throw MyError.invalidArgument
         }
 
+        var totalRunCount = 1
+        var skipLoadingBenchmarksFlagIsValid = skipLoadingBenchmarks == 0
         if commandToPerform == .thresholds {
             guard positionalArguments.count > 0,
                 let thresholdsOperation = ThresholdsOperation(rawValue: positionalArguments.removeFirst())
@@ -319,11 +325,30 @@ import PackagePlugin
                     )
                     throw MyError.invalidArgument
                 }
-                if positionalArguments.count > 0 {
+                let usesExistingBaseline = positionalArguments.count > 0
+                if usesExistingBaseline {
                     shouldBuildTargets = false
                 }
-                break
+                let requestedRunCount = runCount.first.flatMap { Int($0) } ?? 1
+                /// These update the run count to 5 by default if it's set to 1.
+                /// Using relative/range flags doesn't mean anything if we're not running multiple times.
+                /// The benchmarks will need to be run multiple times in order to be able to calculate a
+                /// relative/range of thresholds which satisfy all benchmark runs.
+                if relative > 0 {
+                    args.append("--wants-relative-thresholds")
+                    if !usesExistingBaseline {
+                        totalRunCount = requestedRunCount < 2 ? 5 : requestedRunCount
+                    }
+                }
+                if range > 0 {
+                    args.append("--wants-range-thresholds")
+                    if !usesExistingBaseline {
+                        totalRunCount = requestedRunCount < 2 ? 5 : requestedRunCount
+                    }
+                }
             case .check:
+                skipLoadingBenchmarksFlagIsValid = true
+                shouldBuildTargets = skipLoadingBenchmarks == 0
                 let validRange = 0...1
                 guard validRange.contains(positionalArguments.count) else {
                     print(
@@ -336,6 +361,19 @@ import PackagePlugin
             positionalArguments.forEach { baseline in
                 args.append(contentsOf: ["--baseline", baseline])
             }
+        }
+
+        if !skipLoadingBenchmarksFlagIsValid {
+            print("")
+            print(
+                "Flag --skip-loading-benchmark-targets is only valid for 'thresholds check' operations."
+            )
+            print("")
+            print(help)
+            print("")
+            print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+            print("")
+            throw MyError.invalidArgument
         }
 
         if commandToPerform == .baseline {
@@ -530,93 +568,148 @@ import PackagePlugin
 
         var failedBenchmarkCount = 0
 
-        try withCStrings(args) { cArgs in
-            if debug > 0 {
-                print("To debug, start \(benchmarkToolName) in LLDB using:")
-                print("lldb \(benchmarkTool.string)")
-                print("")
-                print("Then launch \(benchmarkToolName) with:")
-                print("run \(args.dropFirst().joined(separator: " "))")
-                print("")
-                return
+        var allFailureCount = 0
+        let results: [Result<Void, Error>] = (0..<max(totalRunCount, 1))
+            .map { runIdx in
+                // If we're running multiple times, we need to add the run count to the arguments
+                var args = args
+                if totalRunCount > 1 {
+                    args += ["--run-number", "\(runIdx + 1)"]
+                    if quietRunning == 0 {
+                        print(
+                            """
+
+                            Running the command multiple times, round \(runIdx + 1) of \(totalRunCount)...
+                            """
+                        )
+                    }
+                }
+
+                return Result<Void, Error> {
+                    try withCStrings(args) { cArgs in
+                        /// We'll decrement this in the success path
+                        allFailureCount += 1
+
+                        if debug > 0 {
+                            print("To debug, start \(benchmarkToolName) in LLDB using:")
+                            print("lldb \(benchmarkTool.string)")
+                            print("")
+                            print("Then launch \(benchmarkToolName) with:")
+                            print("run \(args.dropFirst().joined(separator: " "))")
+                            print("")
+                            return
+                        }
+
+                        var pid: pid_t = 0
+
+                        // On Linux we need to set LD_PRELOAD to get the malloc interposer working
+                        // while on Darwin this is done with DYLD interpose mechanism
+                        #if os(Linux) && compiler(>=6.3)
+                        if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
+                            writeToStderr(
+                                "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
+                            )
+                        }
+
+                        var environment = ProcessInfo.processInfo.environment
+                        // Only preload libraries that were actually built. With the
+                        // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+                        // exist; preloading a missing path makes ld.so fail every benchmark,
+                        // so skip (and note) absent entries instead.
+                        var preloadLibraries: [String] = []
+                        for library in [swiftRuntimeInterposerLib, interposerLib] {
+                            if FileManager.default.fileExists(atPath: library) {
+                                preloadLibraries.append(library)
+                            } else {
+                                writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                            }
+                        }
+                        if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
+                            preloadLibraries.append(existingPreload)
+                        }
+                        if preloadLibraries.isEmpty == false {
+                            environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
+                        }
+
+                        let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]
+                        defer {
+                            for i in 0..<envp.count - 1 {
+                                free(envp[i])
+                            }
+                        }
+
+                        var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, envp)
+                        #else
+                        var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, environ)
+                        #endif
+
+                        if status == 0 {
+                            if waitpid(pid, &status, 0) != -1 {
+                                // Ok, this sucks, but there is no way to get a C support target for plugins and
+                                // the way the status is extracted portably is with macros - so we just need to
+                                // reimplement the logic here in Swift according to the waitpid man page to
+                                // get some nicer feedback on failure reason.
+                                guard let waitStatus = ExitCode(rawValue: (status & 0xFF00) >> 8) else {
+                                    print("One or more benchmarks returned an unexpected return code \(status)")
+                                    throw MyError.benchmarkUnexpectedReturnCode
+                                }
+                                switch waitStatus {
+                                case .success:
+                                    allFailureCount -= 1
+                                case .baselineNotFound:
+                                    throw MyError.baselineNotFound
+                                case .genericFailure:
+                                    print("One or more benchmark suites crashed during runtime.")
+                                    throw MyError.benchmarkCrashed
+                                case .thresholdRegression:
+                                    throw MyError.benchmarkThresholdRegression
+                                case .thresholdImprovement:
+                                    throw MyError.benchmarkThresholdImprovement
+                                case .benchmarkJobFailed:
+                                    failedBenchmarkCount += 1
+                                case .noPermissions:
+                                    throw MyError.noPermissions
+                                }
+                            } else {
+                                print(
+                                    "waitpid() for pid \(pid) returned a non-zero exit code \(status), errno = \(errno)"
+                                )
+                                exit(errno)
+                            }
+                        } else {
+                            print("Failed to run BenchmarkTool, posix_spawn() returned [\(status)]")
+                        }
+                    }
+                }
             }
 
-            // On Linux we need to set LD_PRELOAD to get the malloc interposer working
-            // while on Darwin this is done with DYLD interpose mechanism
-            #if os(Linux) && compiler(>=6.3)
-            if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
-                writeToStderr(
-                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
+        switch results.count {
+        case ...0:
+            throw MyError.unknownFailure
+        case 1:
+            try results[0].get()
+        default:
+            if allFailureCount > 0 {
+                print(
+                    """
+                    Ran BenchmarkTool \(results.count) times, but it failed \(allFailureCount) times.
+                    Will exit with the first failure.
+
+                    """
                 )
-            }
-
-            var environment = ProcessInfo.processInfo.environment
-            // Only preload libraries that were actually built. With the
-            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
-            // exist; preloading a missing path makes ld.so fail every benchmark,
-            // so skip (and note) absent entries instead.
-            var preloadLibraries: [String] = []
-            for library in [swiftRuntimeInterposerLib, interposerLib] {
-                if FileManager.default.fileExists(atPath: library) {
-                    preloadLibraries.append(library)
-                } else {
-                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                guard
+                    let failure = results.first(where: { result in
+                        switch result {
+                        case .failure:
+                            return true
+                        case .success:
+                            return false
+                        }
+                    })
+                else {
+                    throw MyError.unknownFailure
                 }
-            }
-            if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
-                preloadLibraries.append(existingPreload)
-            }
-            if preloadLibraries.isEmpty == false {
-                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
-            }
-
-            let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]
-            defer {
-                for i in 0..<envp.count - 1 {
-                    free(envp[i])
-                }
-            }
-
-            var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, envp)
-            #else
-            var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, environ)
-            #endif
-
-            if status == 0 {
-                if waitpid(pid, &status, 0) != -1 {
-                    // Ok, this sucks, but there is no way to get a C support target for plugins and
-                    // the way the status is extracted portably is with macros - so we just need to
-                    // reimplement the logic here in Swift according to the waitpid man page to
-                    // get some nicer feedback on failure reason.
-                    guard let waitStatus = ExitCode(rawValue: (status & 0xFF00) >> 8) else {
-                        print("One or more benchmarks returned an unexpected return code \(status)")
-                        throw MyError.benchmarkUnexpectedReturnCode
-                    }
-                    switch waitStatus {
-                    case .success:
-                        break
-                    case .baselineNotFound:
-                        throw MyError.baselineNotFound
-                    case .genericFailure:
-                        print("One or more benchmark suites crashed during runtime.")
-                        throw MyError.benchmarkCrashed
-                    case .thresholdRegression:
-                        throw MyError.benchmarkThresholdRegression
-                    case .thresholdImprovement:
-                        throw MyError.benchmarkThresholdImprovement
-                    case .benchmarkJobFailed:
-                        failedBenchmarkCount += 1
-                    case .noPermissions:
-                        throw MyError.noPermissions
-                    }
-                } else {
-                    print("waitpid() for pid \(pid) returned a non-zero exit code \(status), errno = \(errno)")
-                    exit(errno)
-                }
-            } else {
-                print("Failed to run BenchmarkTool, posix_spawn() returned [\(status)]")
+                try failure.get()
             }
         }
 
@@ -625,16 +718,17 @@ import PackagePlugin
             throw MyError.benchmarkCrashed
         }
     }
+}
 
-    enum MyError: Int32, Error {
-        case successs = 0
-        case benchmarkUnexpectedReturnCode = 1
-        case benchmarkThresholdRegression = 2
-        case benchmarkCrashed = 3
-        case benchmarkThresholdImprovement = 4
-        case baselineNotFound = 5
-        case noPermissions = 6
-        case invalidArgument = 101
-        case buildFailed = 102
-    }
+enum MyError: Int32, Error {
+    case successs = 0
+    case benchmarkUnexpectedReturnCode = 1
+    case benchmarkThresholdRegression = 2
+    case benchmarkCrashed = 3
+    case benchmarkThresholdImprovement = 4
+    case baselineNotFound = 5
+    case noPermissions = 6
+    case invalidArgument = 101
+    case buildFailed = 102
+    case unknownFailure = 103
 }

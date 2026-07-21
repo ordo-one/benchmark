@@ -76,6 +76,15 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "The operation to perform for thresholds")
     var thresholdsOperation: ThresholdsOperation?
 
+    @Option(name: .long, help: "The run number of the benchmark tool. Defaults to 1.")
+    var runNumber: Int?
+
+    @Flag(name: .long, help: "True if we should add relative thresholds to the static files in thresholds update.")
+    var wantsRelativeThresholds = false
+
+    @Flag(name: .long, help: "True if we should add min-max range thresholds to the static files in thresholds update.")
+    var wantsRangeThresholds = false
+
     @Flag(name: .long, help: "True if we should suppress output")
     var quiet: Bool = false
 
@@ -236,6 +245,9 @@ struct BenchmarkTool: AsyncParsableCommand {
             createBenchmarkTarget()
             return
         }
+
+        // Make sure this never goes below 1
+        self.runNumber = runNumber.map { max($0, 1) }
 
         // Skip reading baselines for baseline operations not needing them
         if let operation = baselineOperation, [.delete, .list, .update].contains(operation) == false {

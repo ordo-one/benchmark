@@ -379,21 +379,21 @@ final class BenchmarkResultTests: XCTestCase {
         Benchmark.checkAbsoluteThresholds = true
         deviations = thirdResult.deviationsAgainstAbsoluteThresholds(
             thresholds: absoluteThresholdsP90,
-            p90Threshold: 1_497
+            p90Threshold: .absolute(1_497)
         )
         XCTAssertFalse(deviations.regressions.isEmpty)
 
         Benchmark.checkAbsoluteThresholds = true
         deviations = thirdResult.deviationsAgainstAbsoluteThresholds(
             thresholds: absoluteThresholdsP90,
-            p90Threshold: 1_505
+            p90Threshold: .absolute(1_505)
         )
         XCTAssertFalse(deviations.improvements.isEmpty)
 
         Benchmark.checkAbsoluteThresholds = true
         deviations = thirdResult.deviationsAgainstAbsoluteThresholds(
             thresholds: absoluteThresholdsP90,
-            p90Threshold: 1_501
+            p90Threshold: .absolute(1_501)
         )
         XCTAssertTrue(deviations.improvements.isEmpty && deviations.regressions.isEmpty)
     }

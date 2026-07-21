@@ -536,99 +536,111 @@ extension BenchmarkTool {
         guard quiet == false else { return }
 
         let metrics = deviationResults.map(\.metric).unique()
-        // Get a unique set of all name/target pairs that have threshold deviations, sorted lexically:
-        let namesAndTargets = deviationResults.map { NameAndTarget(name: $0.name, target: $0.target) }
-            .unique().sorted { ($0.target, $0.name) < ($1.target, $1.name) }
 
-        namesAndTargets.forEach { nameAndTarget in
+        var groupedDeviations = [NameAndTarget: [BenchmarkResult.ThresholdDeviation]]()
+        groupedDeviations.reserveCapacity(deviationResults.count)
+        for result in deviationResults {
+            let nameAndTarget = NameAndTarget(name: result.name, target: result.target)
+            groupedDeviations[nameAndTarget, default: []].append(result)
+        }
+        let sortedGroupedDeviations = groupedDeviations.sorted(by: { $0.key < $1.key })
 
+        for (nameAndTarget, deviationResults) in sortedGroupedDeviations {
             printMarkdown("```")
             "\(deviationTitle) for \(nameAndTarget.target):\(nameAndTarget.name)".printAsHeader(addWhiteSpace: false)
             printMarkdown("```")
 
             metrics.forEach { metric in
+                let filteredDeviations = deviationResults.filter { $0.metric == metric }
 
-                let relativeResults = deviationResults.filter {
-                    $0.name == nameAndTarget.name && $0.target == nameAndTarget.target && $0.metric == metric
-                        && $0.relative == true
-                }
-                let absoluteResults = deviationResults.filter {
-                    $0.name == nameAndTarget.name && $0.target == nameAndTarget.target && $0.metric == metric
-                        && $0.relative == false
-                }
                 let width = 40
                 let percentileWidth = 15
 
-                // The baseValue is the new baseline that we're using as the comparison base, so...
-                if absoluteResults.isEmpty == false {
-                    let absoluteTable = TextTable<BenchmarkResult.ThresholdDeviation> {
-                        [
-                            Column(
-                                title:
-                                    "\(metric.description) (\(metric.countable ? $0.units.description : $0.units.timeDescription), Δ)",
-                                value: $0.percentile,
-                                width: width,
-                                align: .left
-                            ),
-                            Column(
-                                title: "\(baselineName)",
-                                value: $0.comparisonValue,
-                                width: percentileWidth,
-                                align: .right
-                            ),
-                            Column(
-                                title: "\(comparingBaselineName)",
-                                value: $0.baseValue,
-                                width: percentileWidth,
-                                align: .right
-                            ),
-                            Column(title: "Difference Δ", value: $0.difference, width: percentileWidth, align: .right),
-                            Column(
-                                title: "Threshold Δ",
-                                value: $0.differenceThreshold,
-                                width: percentileWidth,
-                                align: .right
-                            ),
-                        ]
+                let table = TextTable<BenchmarkResult.ThresholdDeviation> {
+                    var columns: [Column] = []
+                    columns.reserveCapacity(4)
+
+                    let sign =
+                        switch $0.deviation {
+                        case .absolute: "Δ"
+                        case .relative: "%"
+                        case .range: "↔"
+                        }
+                    let diffSign =
+                        switch $0.deviation {
+                        case .absolute, .range: "Δ"
+                        case .relative: "%"
+                        }
+                    let unitDescription = metric.countable ? $0.units.description : $0.units.timeDescription
+                    columns.append(
+                        Column(
+                            title: "\(metric.description) (\(unitDescription), \(sign))",
+                            value: $0.percentile,
+                            width: width,
+                            align: .left
+                        )
+                    )
+
+                    let baseValue = $0.baseValue
+
+                    // If absolute or relative, we can calculate their columns together
+                    let comparisonValue: String
+                    let difference: String
+                    let tolerance: String?
+                    switch $0.deviation {
+                    case .absolute(let compareTo, let diff, let tol):
+                        comparisonValue = "\(compareTo)"
+                        difference = diff.description
+                        tolerance = tol.description
+                    case .relative(let compareTo, let diff, let tol):
+                        comparisonValue = "\(compareTo)"
+                        difference = Statistics.roundToDecimalPlaces(diff, 2).description
+                        tolerance = Statistics.roundToDecimalPlaces(tol, 2).description
+                    case .range(let min, let max):
+                        comparisonValue = "\(min) ... \(max)"
+                        let diff = baseValue >= max ? baseValue - max : baseValue - min
+                        difference = "\(diff)"
+                        tolerance = nil
                     }
 
-                    absoluteTable.print(absoluteResults, style: format.tableStyle)
-                }
+                    columns.append(contentsOf: [
+                        Column(
+                            title: baselineName,
+                            value: comparisonValue,
+                            width: percentileWidth,
+                            align: .right
+                        ),
+                        Column(
+                            title: comparingBaselineName,
+                            value: baseValue,
+                            width: percentileWidth,
+                            align: .right
+                        ),
+                        Column(
+                            title: "Difference \(diffSign)",
+                            value: difference,
+                            width: percentileWidth,
+                            align: .right
+                        ),
+                    ])
 
-                if relativeResults.isEmpty == false {
-                    let relativeTable = TextTable<BenchmarkResult.ThresholdDeviation> {
-                        [
+                    if let tolerance = tolerance {
+                        columns.append(
                             Column(
-                                title:
-                                    "\(metric.description) (\(metric.countable ? $0.units.description : $0.units.timeDescription), %)",
-                                value: $0.percentile,
-                                width: width,
-                                align: .left
-                            ),
-                            Column(
-                                title: "\(baselineName)",
-                                value: $0.comparisonValue,
+                                title: "Tolerance \(diffSign)",
+                                value: tolerance,
                                 width: percentileWidth,
                                 align: .right
-                            ),
-                            Column(
-                                title: "\(comparingBaselineName)",
-                                value: $0.baseValue,
-                                width: percentileWidth,
-                                align: .right
-                            ),
-                            Column(title: "Difference %", value: $0.difference, width: percentileWidth, align: .right),
-                            Column(
-                                title: "Threshold %",
-                                value: $0.differenceThreshold,
-                                width: percentileWidth,
-                                align: .right
-                            ),
-                        ]
+                            )
+                        )
                     }
 
-                    relativeTable.print(relativeResults, style: format.tableStyle)
+                    return columns
                 }
+
+                table.print(filteredDeviations.filter(\.deviation.isRange), style: format.tableStyle)
+                table.print(filteredDeviations.filter(\.deviation.isAbsolute), style: format.tableStyle)
+                table.print(filteredDeviations.filter(\.deviation.isRelative), style: format.tableStyle)
             }
         }
     }
