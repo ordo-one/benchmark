@@ -458,7 +458,7 @@ import PackagePlugin
         interposerLib = tool.path.removingLastComponent().appending(subpath: "libMallocInterposerSwift.so").string
         #if os(Linux) && compiler(>=6.3)
         let swiftRuntimeInterposerLib = tool.path.removingLastComponent()
-            .appending(subpath: "libSwiftRuntimeInterposerC.so").string
+            .appending(subpath: "libSwiftRuntimeInterposerSwift.so").string
         #endif
 
         let filteredTargets =
