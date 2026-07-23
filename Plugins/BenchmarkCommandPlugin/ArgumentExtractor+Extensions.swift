@@ -8,6 +8,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
+import Foundation
 import PackagePlugin
 
 enum ArgumentParsingError: Error, CustomStringConvertible {
@@ -33,8 +34,8 @@ extension ArgumentExtractor {
         var anyMatching = false
 
         try package.targets.forEach { target in
-            let path = target.directory.removingLastComponent()
-            if path.lastComponent == "Benchmarks" {
+            let directory = target.directoryURL.deletingLastPathComponent()
+            if directory.lastPathComponent == "Benchmarks" {
                 for specifiedTarget in specifiedTargets {
                     let regex = try Regex(specifiedTarget)
 

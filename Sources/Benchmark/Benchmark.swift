@@ -108,7 +108,16 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
         deprecated,
         message: "The checking of absolute thresholds should now be done using `swift package benchmark thresholds`"
     )
-    public static var checkAbsoluteThresholds = false
+    public static var checkAbsoluteThresholds: Bool {
+        get { _checkAbsoluteThresholds }
+        set { _checkAbsoluteThresholds = newValue }
+    }
+
+    // Non-deprecated backing store so the library can populate the flag internally
+    // (e.g. from the `--check-absolute` command-line option) without tripping the
+    // deprecation warning on the public `checkAbsoluteThresholds` API.
+    @_documentation(visibility: internal)
+    static var _checkAbsoluteThresholds = false
 
     @_documentation(visibility: internal)
     public static var benchmarks: [Benchmark] = [] // Bookkeeping of all registered benchmarks
