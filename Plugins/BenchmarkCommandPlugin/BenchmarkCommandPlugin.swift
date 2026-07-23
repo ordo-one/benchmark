@@ -477,7 +477,7 @@ import PackagePlugin
         #endif
         #if os(Linux) && compiler(>=6.3)
         let swiftRuntimeInterposerLib = toolDirectory
-            .appending(subpath: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
+            .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
         #endif
 
         let filteredTargets =
