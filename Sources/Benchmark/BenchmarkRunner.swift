@@ -106,7 +106,7 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
     public static func setupBenchmarkRunner(registerBenchmarks: () -> Void) async {
         do {
             var command = Self.parseOrExit()
-            Benchmark.checkAbsoluteThresholds = command.checkAbsolute
+            Benchmark._checkAbsoluteThresholds = command.checkAbsolute
             registerBenchmarks()
             try await command.run()
         } catch {
