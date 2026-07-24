@@ -1,4 +1,4 @@
-#if compiler(>=6.1)
+#if swift(>=6.0)
 import Foundation
 #endif
 import PackagePlugin
@@ -15,9 +15,7 @@ struct PluginFactory: BuildToolPlugin {
 
         let tool = try context.tool(named: "BenchmarkBoilerplateGenerator")
 
-        // PackagePlugin's `Path` API was deprecated in favor of Foundation `URL`
-        // starting with the 6.x tools-version; older toolchains only have `Path`.
-        #if compiler(>=6.1)
+        #if swift(>=6.0)
         guard target.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks" else { return [] }
 
         let swiftFile = context.pluginWorkDirectoryURL.appending(path: "__BenchmarkBoilerplate.swift")

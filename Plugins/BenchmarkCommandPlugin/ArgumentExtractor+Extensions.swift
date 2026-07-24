@@ -8,7 +8,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
-#if compiler(>=6.1)
+#if swift(>=6.0)
 import Foundation
 #endif
 import PackagePlugin
@@ -36,7 +36,7 @@ extension ArgumentExtractor {
         var anyMatching = false
 
         try package.targets.forEach { target in
-            #if compiler(>=6.1)
+            #if swift(>=6.0)
             let isBenchmarkTarget = target.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
             #else
             let isBenchmarkTarget = target.directory.removingLastComponent().lastComponent == "Benchmarks"

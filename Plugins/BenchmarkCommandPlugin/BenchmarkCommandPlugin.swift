@@ -206,9 +206,7 @@ import PackagePlugin
             print("")
         }
 
-        // PackagePlugin's `Path` API was deprecated in favor of Foundation `URL`
-        // starting with the 6.x tools-version; older toolchains only have `Path`.
-        #if compiler(>=6.1)
+        #if swift(>=6.0)
         let packageDirectory = context.package.directoryURL.path(percentEncoded: false)
         #else
         let packageDirectory = context.package.directory.string
@@ -455,7 +453,7 @@ import PackagePlugin
         }
 
         let tool = buildResult.builtArtifacts.first(where: {
-            #if compiler(>=6.1)
+            #if swift(>=6.0)
             return $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
             #else
             return $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
@@ -466,7 +464,7 @@ import PackagePlugin
             throw MyError.buildFailed
         }
 
-        #if compiler(>=6.1)
+        #if swift(>=6.0)
         let toolDirectory = tool.url.deletingLastPathComponent()
         benchmarkTool = tool.url.path(percentEncoded: false)
         interposerLib = toolDirectory.appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
@@ -484,7 +482,7 @@ import PackagePlugin
             swiftSourceModuleTargets
             .filter { $0.kind == .executable }
             .filter { benchmark in
-                #if compiler(>=6.1)
+                #if swift(>=6.0)
                 return benchmark.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
                 #else
                 return benchmark.directory.removingLastComponent().lastComponent == "Benchmarks"
@@ -537,7 +535,7 @@ import PackagePlugin
                 // Filter out all executable products which are Benchmarks we should run
                 let benchmarks = buildResult.builtArtifacts
                     .filter { benchmark in
-                        #if compiler(>=6.1)
+                        #if swift(>=6.0)
                         filteredTargets.first(where: { $0.name == benchmark.url.lastPathComponent }) != nil ? true : false
                         #else
                         filteredTargets.first(where: { $0.name == benchmark.path.lastComponent }) != nil ? true : false
@@ -549,7 +547,7 @@ import PackagePlugin
                 }
 
                 benchmarks.forEach { benchmark in
-                    #if compiler(>=6.1)
+                    #if swift(>=6.0)
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.url.path(percentEncoded: false)])
                     #else
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.path.string])
