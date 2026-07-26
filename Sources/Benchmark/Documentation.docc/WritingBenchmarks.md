@@ -148,6 +148,59 @@ Benchmark("Foundation Date()", configuration: .init(scalingFactor: .mega)) { ben
 }
 ```
 
+#### When to use scalingFactor
+
+On Apple Silicon, `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)` has a resolution of
+approximately 41.67 ns (24 MHz). With the default `scalingFactor` of `.one`, each
+sample measures a single execution of the closure. For operations faster than
+roughly 100 ns, the wall-clock measurement is dominated by timer granularity —
+reported values will cluster around quantized steps (e.g. 42, 83, 125 ns) rather
+than reflecting real differences between benchmarks.
+
+Setting a higher `scalingFactor` (e.g. `.kilo`) amortizes this overhead: the
+benchmark closure performs 1,000 inner iterations per sample, the framework
+divides the measured time by 1,000, and reports the per-operation result. This gives sub-nanosecond effective
+resolution while keeping the timer overhead negligible.
+
+**Choosing a value:** pick the smallest factor that makes timer overhead
+insignificant relative to the operation under test. `.kilo` is a good default for
+operations in the 1–500 ns range; `.mega` suits even faster operations or
+cases where extreme precision is desired, such as `Date()` creation.
+
+#### Stateful benchmarks and memory growth
+
+When a benchmark mutates shared state (e.g. inserting into a collection) and uses
+a `scalingFactor` higher than `.one`, each sample performs many mutations. Because
+the state persists across samples, it can grow without bound over the course of a
+benchmark run. For example, `.kilo` with the default `maxIterations` of 10,000
+means 10 million total mutations — enough to exhaust memory if each mutation adds
+data.
+
+To avoid this, you can cap `maxIterations` to limit total growth, or (preferably)
+periodically reset the state inside the closure to ensure consistent measurements:
+
+```swift
+let box = MyMutableBox(initialData)
+
+// Option 1: limit the number of samples
+Benchmark("insert",
+          configuration: .init(scalingFactor: .kilo, maxIterations: 200)) { benchmark in
+    for _ in benchmark.scaledIterations {
+        box.collection.insert(element)
+    }
+}
+
+// Option 2: use startMeasurement() to exclude periodic resets
+Benchmark("insert",
+          configuration: .init(scalingFactor: .kilo)) { benchmark in
+    box.collection = initialData  // reset — not measured
+    benchmark.startMeasurement()
+    for _ in benchmark.scaledIterations {
+        box.collection.insert(element)
+    }
+}
+```
+
 ### Metrics
 
 Benchmark supports a wide range of measurements defined by ``BenchmarkMetric``.
