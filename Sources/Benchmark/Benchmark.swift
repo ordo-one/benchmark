@@ -8,7 +8,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
-import Dispatch
 import Foundation
 
 // swiftlint:disable file_length identifier_name
@@ -18,11 +17,11 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     @_documentation(visibility: internal)
     public typealias BenchmarkClosure = (_ benchmark: Benchmark) -> Void
     @_documentation(visibility: internal)
-    public typealias BenchmarkAsyncClosure = (_ benchmark: Benchmark) async -> Void
+    public typealias BenchmarkAsyncClosure = @isolated(any) (_ benchmark: Benchmark) async -> Void
     @_documentation(visibility: internal)
     public typealias BenchmarkThrowingClosure = (_ benchmark: Benchmark) throws -> Void
     @_documentation(visibility: internal)
-    public typealias BenchmarkAsyncThrowingClosure = (_ benchmark: Benchmark) async throws -> Void
+    public typealias BenchmarkAsyncThrowingClosure = @isolated(any) (_ benchmark: Benchmark) async throws -> Void
     @_documentation(visibility: internal)
     public typealias BenchmarkMeasurementSynchronization = (_ explicitStartStop: Bool) -> Void
     @_documentation(visibility: internal)
@@ -160,8 +159,11 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     public var executablePath: String?
     /// closure: The actual benchmark closure that will be measured
     var closure: BenchmarkClosure? // The actual benchmark to run
-    /// asyncClosure: The actual benchmark (async) closure that will be measured
-    var asyncClosure: BenchmarkAsyncClosure? // The actual benchmark to run
+    /// asyncClosure: The actual benchmark (async) closure that will be measured.
+    /// Stored as the throwing variant so both throwing and non-throwing async closures can be held
+    /// while preserving the closure's actor isolation (captured via `@isolated(any)`), which lets the
+    /// executor run the measurement loop *on* that isolation hop-free (e.g. `@MainActor` benchmarks).
+    var asyncClosure: BenchmarkAsyncThrowingClosure? // The actual benchmark to run
     // setup/teardown hooks for the instance
     var setup: BenchmarkSetupHook?
     var teardown: BenchmarkTeardownHook?
@@ -333,26 +335,26 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     ///   - setup: A closure that will be run once before the benchmark iterations are run
     ///   - teardown: A closure that will be run once after the benchmark iterations are done
     @discardableResult
-    public convenience init?(
+    public init?(
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping BenchmarkAsyncThrowingClosure,
         setup: BenchmarkSetupHook? = nil,
         teardown: BenchmarkTeardownHook? = nil
     ) {
-        self.init(
-            name,
-            configuration: configuration,
-            closure: { benchmark in
-                do {
-                    try await closure(benchmark)
-                } catch {
-                    benchmark.error("Benchmark \(name) failed with \(String(reflecting: error))")
-                }
-            },
-            setup: setup,
-            teardown: teardown
-        )
+        if configuration.skip {
+            return nil
+        }
+        target = ""
+        self.baseName = name
+        self.configuration = configuration
+        // Stored directly (rather than wrapped in an error-handling closure) so the closure's actor
+        // isolation is preserved; any thrown error is caught in `run()`.
+        asyncClosure = closure
+        self.setup = setup
+        self.teardown = teardown
+
+        benchmarkRegistration()
     }
 
     // Shared between sync/async actual benchmark registration
@@ -438,38 +440,27 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     // The rest is intenral supporting infrastructure that should only
     // be used by the BenchmarkRunner
 
-    // https://forums.swift.org/t/actually-waiting-for-a-task/56230
-    // Async closures can possibly show false memory leaks possibly due to Swift runtime allocations
-    func runAsync() {
-        guard let asyncClosure else {
-            fatalError("Tried to runAsync on benchmark instance without any async closure set")
-        }
-
-        let semaphore = DispatchSemaphore(value: 0)
-
-        // Must do this in a separate thread, otherwise we block the concurrent thread pool
-        DispatchQueue.global(qos: .userInitiated)
-            .async {
-                Task {
-                    self._startMeasurement(false)
-                    await asyncClosure(self)
-                    self._stopMeasurement(false)
-
-                    semaphore.signal()
-                }
-            }
-        semaphore.wait()
-    }
-
     // Public but should only be used by BenchmarkRunner
+    //
+    // The `isolation` parameter defaults to the caller's isolation (`#isolation`), so when the
+    // executor runs the measurement loop on a benchmark's desired actor (e.g. `@MainActor`), the
+    // async closure below is invoked on that same isolation with no actor hop. There is no longer
+    // any thread-blocking bridge (the old `DispatchSemaphore`), so benchmarks may freely run on the
+    // main actor / main thread without deadlocking.
     @_documentation(visibility: internal)
-    public func run() {
+    public func run(isolation: isolated (any Actor)? = #isolation) async {
         if let closure {
             _startMeasurement(false)
             closure(self)
             _stopMeasurement(false)
-        } else {
-            runAsync()
+        } else if let asyncClosure {
+            _startMeasurement(false)
+            do {
+                try await asyncClosure(self)
+            } catch {
+                self.error("Benchmark \(name) failed with \(String(reflecting: error))")
+            }
+            _stopMeasurement(false)
         }
     }
 }
