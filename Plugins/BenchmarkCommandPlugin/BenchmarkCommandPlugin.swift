@@ -11,8 +11,8 @@
 // 'Benchmark' plugin that is responsible for gathering command line arguments and then
 // Running the `BenchmarkTool` for each benchmark target.
 
-import PackagePlugin
 @preconcurrency import Foundation
+import PackagePlugin
 
 #if canImport(Darwin)
 @preconcurrency import Darwin
@@ -173,7 +173,8 @@ import PackagePlugin
         // identifiers so consumers that still pin via the old GitHub URL continue to work.
         let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
-        let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
+        let benchmarkTool: String // = try context.tool(named: benchmarkToolName)
+        let interposerLib: String
 
         // Resolve which identifier this consumer actually has the benchmark package under,
         // so generated boilerplate matches what SPM sees (depends on whether they pinned
@@ -205,10 +206,16 @@ import PackagePlugin
             print("")
         }
 
+        #if swift(>=6.0)
+        let packageDirectory = context.package.directoryURL.path(percentEncoded: false)
+        #else
+        let packageDirectory = context.package.directory.string
+        #endif
+
         var args: [String] = [
             benchmarkToolName,
             "--command", commandToPerform.rawValue,
-            "--baseline-storage-path", context.package.directory.string,
+            "--baseline-storage-path", packageDirectory,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
             "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
@@ -419,10 +426,7 @@ import PackagePlugin
         }
 
         // Build the BenchmarkTool manually in release mode to work around https://github.com/apple/swift-package-manager/issues/7210
-        guard
-            let benchmarkToolModule = benchmarkToolModuleTargets.first(where: {
-                $0.kind == .executable && $0.name == benchmarkToolName
-            })
+        guard let benchmarkToolModule = benchmarkToolModuleTargets.first(where: { $0.kind == .executable && $0.name == benchmarkToolName })
         else {
             print("Benchmark failed to find the BenchmarkTool target.")
             throw MyError.buildFailed
@@ -449,25 +453,40 @@ import PackagePlugin
         }
 
         let tool = buildResult.builtArtifacts.first(where: {
-            $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
+            #if swift(>=6.0)
+            return $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
+            #else
+            return $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
+            #endif
         })
 
         guard let tool else {
             throw MyError.buildFailed
         }
 
-        benchmarkTool = tool.path
+        #if swift(>=6.0)
+        let toolDirectory = tool.url.deletingLastPathComponent()
+        benchmarkTool = tool.url.path(percentEncoded: false)
+        interposerLib = toolDirectory.appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
+        #else
+        let toolDirectory = tool.path.removingLastComponent()
+        benchmarkTool = tool.path.string
+        interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
+        #endif
         #if os(Linux) && compiler(>=6.3)
-        let swiftRuntimeInterposerLib = tool.path.removingLastComponent()
-            .appending(subpath: "libSwiftRuntimeInterposerC.so").string
+        let swiftRuntimeInterposerLib = toolDirectory
+            .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
         #endif
 
         let filteredTargets =
             swiftSourceModuleTargets
             .filter { $0.kind == .executable }
             .filter { benchmark in
-                let path = benchmark.directory.removingLastComponent()
-                return path.lastComponent == "Benchmarks" ? true : false
+                #if swift(>=6.0)
+                return benchmark.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
+                #else
+                return benchmark.directory.removingLastComponent().lastComponent == "Benchmarks"
+                #endif
             }
             .filter { benchmark in
                 swiftSourceModuleTargets.first(where: { $0.name == benchmark.name }) != nil ? true : false
@@ -516,7 +535,11 @@ import PackagePlugin
                 // Filter out all executable products which are Benchmarks we should run
                 let benchmarks = buildResult.builtArtifacts
                     .filter { benchmark in
+                        #if swift(>=6.0)
+                        filteredTargets.first(where: { $0.name == benchmark.url.lastPathComponent }) != nil ? true : false
+                        #else
                         filteredTargets.first(where: { $0.name == benchmark.path.lastComponent }) != nil ? true : false
+                        #endif
                     }
 
                 if benchmarks.isEmpty {
@@ -524,7 +547,11 @@ import PackagePlugin
                 }
 
                 benchmarks.forEach { benchmark in
+                    #if swift(>=6.0)
+                    args.append(contentsOf: ["--benchmark-executable-paths", benchmark.url.path(percentEncoded: false)])
+                    #else
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.path.string])
+                    #endif
                 }
             }
         }
@@ -534,7 +561,7 @@ import PackagePlugin
         try withCStrings(args) { cArgs in
             if debug > 0 {
                 print("To debug, start \(benchmarkToolName) in LLDB using:")
-                print("lldb \(benchmarkTool.string)")
+                print("lldb \(benchmarkTool)")
                 print("")
                 print("Then launch \(benchmarkToolName) with:")
                 print("run \(args.dropFirst().joined(separator: " "))")
@@ -542,6 +569,8 @@ import PackagePlugin
                 return
             }
 
+            // On Linux we need to set LD_PRELOAD to get the malloc interposer working
+            // while on Darwin this is done with DYLD interpose mechanism
             #if os(Linux) && compiler(>=6.3)
             if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                 writeToStderr(
@@ -550,10 +579,23 @@ import PackagePlugin
             }
 
             var environment = ProcessInfo.processInfo.environment
+            // Only preload libraries that were actually built. With the
+            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+            // exist; preloading a missing path makes ld.so fail every benchmark,
+            // so skip (and note) absent entries instead.
+            var preloadLibraries: [String] = []
+            for library in [swiftRuntimeInterposerLib, interposerLib] {
+                if FileManager.default.fileExists(atPath: library) {
+                    preloadLibraries.append(library)
+                } else {
+                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                }
+            }
             if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
-                environment["LD_PRELOAD"] = "\(swiftRuntimeInterposerLib):\(existingPreload)"
-            } else {
-                environment["LD_PRELOAD"] = swiftRuntimeInterposerLib
+                preloadLibraries.append(existingPreload)
+            }
+            if preloadLibraries.isEmpty == false {
+                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
             }
 
             let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]
@@ -564,10 +606,10 @@ import PackagePlugin
             }
 
             var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, envp)
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, envp)
             #else
             var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, environ)
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, environ)
             #endif
 
             if status == 0 {

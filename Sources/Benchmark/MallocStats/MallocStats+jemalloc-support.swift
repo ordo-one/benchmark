@@ -15,6 +15,8 @@
 // let optionString = "J"
 // malloc_stats_print(nil, nil, optionString)
 
+#if canImport(jemalloc)
+
 // MARK: - Pokedex
 
 struct Pokedex: Codable {
@@ -361,3 +363,5 @@ struct MergedLextent: Codable {
 }
 
 // swiftlint:enable all
+
+#endif

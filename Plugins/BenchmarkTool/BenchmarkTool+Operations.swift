@@ -31,7 +31,7 @@ extension BenchmarkTool {
             let benchmarkReply = try read()
 
             switch benchmarkReply {
-            case let .list(benchmark):
+            case .list(let benchmark):
                 benchmark.executablePath = benchmarkPath
                 benchmark.target = FilePath(benchmarkPath).lastComponent!.description
                 if metrics.isEmpty == false {
@@ -40,7 +40,7 @@ extension BenchmarkTool {
                 benchmarks.append(benchmark)
             case .end:
                 break outerloop
-            case let .error(description):
+            case .error(let description):
                 failBenchmark(description)
                 break outerloop
             default:
@@ -57,12 +57,12 @@ extension BenchmarkTool {
             let benchmarkReply = try read()
 
             switch benchmarkReply {
-            case let .result(benchmark: benchmark, results: results):
+            case .result(benchmark: let benchmark, results: let results):
                 let filteredResults = results.filter { benchmark.configuration.metrics.contains($0.metric) }
                 benchmarkResults[BenchmarkIdentifier(target: target, name: benchmark.name)] = filteredResults
             case .end:
                 break outerloop
-            case let .error(description):
+            case .error(let description):
                 failBenchmark(description, exitCode: .benchmarkJobFailed, "\(target)/\(benchmark.name)")
 
                 benchmarkResults[BenchmarkIdentifier(target: target, name: benchmark.name)] = []

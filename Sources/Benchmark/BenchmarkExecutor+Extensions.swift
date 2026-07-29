@@ -23,19 +23,82 @@ extension BenchmarkExecutor {
 extension BenchmarkExecutor {
     func mallocStatsProducerNeeded(_ metric: BenchmarkMetric) -> Bool {
         switch metric {
-        case .mallocCountLarge:
-            return true
         case .memoryLeaked:
+            #if canImport(MallocInterposerSwift)
+            return false
+            #else
+            return true
+            #endif
+        case .memoryLeakedBytes:
+            return true
+        case .mallocFreeDelta:
+            #if canImport(MallocInterposerSwift)
+            return true
+            #else
+            return false
+            #endif
+        case .mallocCountTotal:
             return true
         case .mallocCountSmall:
             return true
-        case .mallocCountTotal:
+        case .mallocCountLarge:
+            return true
+        case .mallocBytesCount:
             return true
         case .allocatedResidentMemory:
+            return true
+        case .freeCountTotal:
             return true
         default:
             return false
         }
+    }
+}
+
+extension BenchmarkExecutor {
+    /// Maps a measured window's interposer counter deltas to the `(metric, value)` pairs to record.
+    ///
+    /// Extracted as a pure function so the leak/scaling arithmetic can be unit-tested without a live
+    /// interposer. `mallocFreeDelta` / `memoryLeakedBytes` are clamped to `0`: a net-negative window
+    /// (more frees than mallocs — e.g. freeing a warmup survivor, or cross-thread frees) is not a
+    /// leak, and clamping records a `0` sample rather than letting `Statistics.add` drop it, which
+    /// would desync the column's sample count and bias the average upward.
+    static func mallocStatistics( // swiftlint:disable:this function_parameter_count
+        mallocCountDelta: Int,
+        mallocBytesDelta: Int,
+        mallocSmallDelta: Int,
+        mallocLargeDelta: Int,
+        freeCountDelta: Int,
+        freeBytesDelta: Int
+    ) -> [(metric: BenchmarkMetric, value: Int)] {
+        [
+            (.mallocCountTotal, mallocCountDelta),
+            (.mallocBytesCount, mallocBytesDelta),
+            (.mallocCountSmall, mallocSmallDelta),
+            (.mallocCountLarge, mallocLargeDelta),
+            (.freeCountTotal, freeCountDelta),
+            (.mallocFreeDelta, max(0, mallocCountDelta - freeCountDelta)),
+            (.memoryLeakedBytes, max(0, mallocBytesDelta - freeBytesDelta)),
+        ]
+    }
+}
+
+extension BenchmarkExecutor {
+    /// The subset of `metrics` that the active malloc backend cannot populate.
+    ///
+    /// Each backend produces a different malloc-metric family (the interposer has no resident-set
+    /// measurement; jemalloc has no free counter), so requesting the other backend's metric yields a
+    /// silently-empty column — and, worse, a no-op threshold gate. Callers warn on a non-empty result
+    /// so the omission is visible. Pure (no live backend) so it can be unit-tested.
+    static func metricsUnsupportedByBackend(_ metrics: [BenchmarkMetric]) -> [BenchmarkMetric] {
+        #if canImport(MallocInterposerSwift)
+        let unsupported: Set<BenchmarkMetric> = [.allocatedResidentMemory, .memoryLeaked]
+        #else
+        let unsupported: Set<BenchmarkMetric> = [
+            .freeCountTotal, .mallocBytesCount, .mallocFreeDelta, .memoryLeakedBytes,
+        ]
+        #endif
+        return metrics.filter { unsupported.contains($0) }
     }
 }
 
