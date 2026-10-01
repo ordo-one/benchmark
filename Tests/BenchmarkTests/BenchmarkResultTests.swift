@@ -458,6 +458,74 @@ final class BenchmarkResultTests: XCTestCase {
         XCTAssertEqual(result.normalize(125_000_000), result.scale(125_000_000_000))
     }
 
+    func testBenchmarkResultConvertScalingFactor() throws {
+        // A benchmark measured at 500 μs/iteration with scaling factor .one...
+        let unscaledStatistics = Statistics()
+        unscaledStatistics.add(500_000)
+        let unscaled = BenchmarkResult(
+            metric: .wallClock,
+            timeUnits: .automatic,
+            scalingFactor: .one,
+            warmupIterations: 0,
+            statistics: unscaledStatistics
+        )
+
+        // ...and the same benchmark measured with scaling factor .kilo (1000 iterations per measurement)
+        let scaledStatistics = Statistics()
+        scaledStatistics.add(500_000_000)
+        let scaled = BenchmarkResult(
+            metric: .wallClock,
+            timeUnits: .automatic,
+            scalingFactor: .kilo,
+            warmupIterations: 0,
+            statistics: scaledStatistics
+        )
+
+        XCTAssertEqual(scaled.convertScalingFactor(500_000_000, to: unscaled), 500_000)
+        XCTAssertEqual(unscaled.convertScalingFactor(500_000, to: scaled), 500_000_000)
+        XCTAssertEqual(scaled.convertScalingFactor(500_000_000, to: scaled), 500_000_000)
+
+        // Presented using the baseline's scaling we get identical values regardless of direction
+        XCTAssertEqual(unscaled.scale(scaled.convertScalingFactor(500_000_000, to: unscaled)), unscaled.scale(500_000))
+        XCTAssertEqual(scaled.scale(unscaled.convertScalingFactor(500_000, to: scaled)), scaled.scale(500_000_000))
+
+        // Throughput is measured in measurements/s, so fewer measurements/s for a larger scaling factor
+        let throughputStatistics = Statistics(prefersLarger: true)
+        throughputStatistics.add(2_000)
+        let unscaledThroughput = BenchmarkResult(
+            metric: .throughput,
+            timeUnits: .automatic,
+            scalingFactor: .one,
+            warmupIterations: 0,
+            statistics: throughputStatistics
+        )
+        let scaledThroughput = BenchmarkResult(
+            metric: .throughput,
+            timeUnits: .automatic,
+            scalingFactor: .kilo,
+            warmupIterations: 0,
+            statistics: throughputStatistics
+        )
+        XCTAssertEqual(scaledThroughput.convertScalingFactor(2_000, to: unscaledThroughput), 2_000_000)
+        XCTAssertEqual(unscaledThroughput.convertScalingFactor(2_000_000, to: scaledThroughput), 2_000)
+
+        // Metrics independent of the scaling factor are left untouched
+        let memory = BenchmarkResult(
+            metric: .peakMemoryResident,
+            timeUnits: .automatic,
+            scalingFactor: .kilo,
+            warmupIterations: 0,
+            statistics: throughputStatistics
+        )
+        XCTAssertEqual(memory.convertScalingFactor(2_000, to: unscaled), 2_000)
+
+        // Comparing the two runs of the same benchmark must not report any deviations
+        XCTAssert(scaled.deviationsComparedWith(unscaled, thresholds: .strict).regressions.isEmpty)
+        XCTAssert(scaled.deviationsComparedWith(unscaled, thresholds: .strict).improvements.isEmpty)
+        XCTAssert(unscaled.deviationsComparedWith(scaled, thresholds: .strict).regressions.isEmpty)
+        XCTAssert(unscaled.deviationsComparedWith(scaled, thresholds: .strict).improvements.isEmpty)
+    }
+
     func testBenchmarkResultEnumerations() throws {
         var scalingFactor: BenchmarkScalingFactor = .one
         var description = ""
