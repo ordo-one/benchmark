@@ -18,6 +18,8 @@ Benchmark requires Swift 5.7 support as it uses Regex and Duration types introdu
 
 On Swift 6.3+ Benchmark by default depends on and uses a custom malloc interposer (the [malloc-interposer](https://github.com/ordo-one/malloc-interposer) package) to capture memory allocation statistics. This is controlled via a Swift Package Manager trait named `MallocInterposer`, which is **enabled by default** and requires no system installation — it is fetched as a package dependency.
 
+On Linux with Swift 6.3, Benchmark also uses a Swift runtime interposer for ARC statistics to work around a runtime hook crash. Swift 6.4 and newer use the native runtime hooks and do not depend on or preload the runtime interposer.
+
 On Swift 6.2 and 5.x toolchains the backend is instead the [jemalloc](https://jemalloc.net) memory allocation library, controlled via a trait named `Jemalloc` (also enabled by default).
 
 On Swift 6.2 and 5.x toolchains the Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics (see below). On Swift 6.3+ no installation is needed.
