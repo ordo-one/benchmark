@@ -489,6 +489,31 @@ final class BenchmarkResultTests: XCTestCase {
         XCTAssertEqual(unscaled.scale(scaled.convertScalingFactor(500_000_000, to: unscaled)), unscaled.scale(500_000))
         XCTAssertEqual(scaled.scale(unscaled.convertScalingFactor(500_000, to: scaled)), scaled.scale(500_000_000))
 
+        // Both present per-iteration values in μs (the scaled run picked ms for its 500 ms samples,
+        // scaled down by .kilo), while the raw per-measurement values differ in unit
+        XCTAssertEqual(unscaled.presentationUnitDivisor(scaled: true), 1_000)
+        XCTAssertEqual(scaled.presentationUnitDivisor(scaled: true), 1_000)
+        XCTAssertEqual(unscaled.presentationUnitDivisor(scaled: false), 1_000)
+        XCTAssertEqual(scaled.presentationUnitDivisor(scaled: false), 1_000_000)
+
+        // A faster scaled run at 500 ns/iteration picks μs for its 500 μs samples and presents
+        // per-iteration values in ns, so it has the finer unit of the two and should be the
+        // frame when presented side by side with `unscaled`
+        let fastStatistics = Statistics()
+        fastStatistics.add(500_000)
+        let fastScaled = BenchmarkResult(
+            metric: .wallClock,
+            timeUnits: .automatic,
+            scalingFactor: .kilo,
+            warmupIterations: 0,
+            statistics: fastStatistics
+        )
+        XCTAssertEqual(fastScaled.presentationUnitDivisor(scaled: true), 1)
+        XCTAssertLessThan(fastScaled.presentationUnitDivisor(scaled: true), unscaled.presentationUnitDivisor(scaled: true))
+        // Presented in that frame the unscaled run is 500 000 ns/iteration and the fast run 500 ns/iteration
+        XCTAssertEqual(fastScaled.scale(unscaled.convertScalingFactor(500_000, to: fastScaled)), 500_000)
+        XCTAssertEqual(fastScaled.scale(500_000), 500)
+
         // Throughput is measured in measurements/s, so fewer measurements/s for a larger scaling factor
         let throughputStatistics = Statistics(prefersLarger: true)
         throughputStatistics.add(2_000)

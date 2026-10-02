@@ -381,6 +381,20 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
         return Int(converted)
     }
 
+    /// The divisor applied to raw measurements when presenting them in this result's units, i.e. the
+    /// magnitude of the unit shown in the header (a smaller divisor means a finer unit). This mirrors
+    /// what `scale(_:)` (when `scaled`) or `normalize(_:)` use, so two results can be compared to find
+    /// the one with the finer unit before presenting them side by side.
+    public func presentationUnitDivisor(scaled: Bool) -> Int {
+        if metric == .throughput {
+            return scaledScalingFactor.rawValue
+        }
+        if scaled, metric.useScalingFactor, statistics.timeUnits == .automatic {
+            return scaledTimeUnits.divisor
+        }
+        return timeUnits.divisor
+    }
+
     public func normalizeCompare(_ value: Int) -> Int {
         var roundedValue = ((Double(value) * 1_000.0) / Double(timeUnits.factor)) / 1_000.0
         roundedValue.round(.toNearestOrEven)

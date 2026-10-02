@@ -326,12 +326,16 @@ extension BenchmarkTool {
                             }
 
                             // Both results are presented using the time units and scaling factor of
-                            // the baseline, so the header and all rows must be derived from `base`
+                            // whichever of the two has the finer unit, so no precision is lost for the
+                            // other one. The header and all rows must be derived from that `frame`.
                             let displayScaled = self.scale == false && base.metric.useScalingFactor
+                            let frame =
+                                result.presentationUnitDivisor(scaled: displayScaled)
+                                < base.presentationUnitDivisor(scaled: displayScaled) ? result : base
                             let title =
                                 displayScaled
-                                ? "\(base.metric.description) \(base.scaledUnitDescriptionPretty)"
-                                : "\(base.metric.description) \(base.unitDescriptionPretty)"
+                                ? "\(frame.metric.description) \(frame.scaledUnitDescriptionPretty)"
+                                : "\(frame.metric.description) \(frame.unitDescriptionPretty)"
 
                             let width = 40
                             let table = TextTable<ScaledResults> {
@@ -390,15 +394,17 @@ extension BenchmarkTool {
 
                             var scaledResults: [ScaledResults] = []
 
-                            // Rescale result to the scaling factor of base if needed
+                            // Rescale both to the scaling factor of the frame if needed
                             let percentiles = result.statistics.percentiles().map {
-                                result.convertScalingFactor($0, to: base)
+                                result.convertScalingFactor($0, to: frame)
                             }
-                            let percentilesBase = base.statistics.percentiles()
+                            let percentilesBase = base.statistics.percentiles().map {
+                                base.convertScalingFactor($0, to: frame)
+                            }
 
                             var resultPercentiles = ScaledResults.Percentiles()
                             var basePercentiles = ScaledResults.Percentiles()
-                            let adjustmentFunction: (Int) -> Int = displayScaled ? base.scale : base.normalize
+                            let adjustmentFunction: (Int) -> Int = displayScaled ? frame.scale : frame.normalize
                             let samples = result.statistics.measurementCount - base.statistics.measurementCount
 
                             basePercentiles.p0 = adjustmentFunction(percentilesBase[0])
