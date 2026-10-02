@@ -571,7 +571,8 @@ import PackagePlugin
 
             // On Linux we need to set LD_PRELOAD to get the malloc interposer working
             // while on Darwin this is done with DYLD interpose mechanism
-            #if os(Linux) && compiler(>=6.3) && compiler(<6.4)
+            #if os(Linux) && compiler(>=6.3)
+            #if compiler(<6.4)
             if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                 writeToStderr(
                     "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
