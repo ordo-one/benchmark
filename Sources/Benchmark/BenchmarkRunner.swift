@@ -13,7 +13,7 @@ import BenchmarkShared
 #if canImport(MallocInterposerSwift)
 import MallocInterposerSwift
 #endif
-#if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
 import SwiftRuntimeInterposerSwift
 #endif
 
@@ -132,7 +132,7 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
         #if canImport(MallocInterposerSwift)
         MallocInterposerSwift.initialize()
         #endif
-        #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+        #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
         SwiftRuntimeInterposerSwift.initialize()
         #endif
         let benchmarkExecutor = BenchmarkExecutor(quiet: quiet)

@@ -473,7 +473,7 @@ import PackagePlugin
         benchmarkTool = tool.path.string
         interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
         #endif
-        #if os(Linux) && compiler(>=6.3)
+        #if os(Linux) && compiler(>=6.3) && compiler(<6.4)
         let swiftRuntimeInterposerLib = toolDirectory
             .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
         #endif
@@ -572,11 +572,16 @@ import PackagePlugin
             // On Linux we need to set LD_PRELOAD to get the malloc interposer working
             // while on Darwin this is done with DYLD interpose mechanism
             #if os(Linux) && compiler(>=6.3)
+            #if compiler(<6.4)
             if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                 writeToStderr(
                     "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
                 )
             }
+            let libraries = [swiftRuntimeInterposerLib, interposerLib]
+            #else
+            let libraries = [interposerLib]
+            #endif
 
             var environment = ProcessInfo.processInfo.environment
             // Only preload libraries that were actually built. With the
@@ -584,7 +589,7 @@ import PackagePlugin
             // exist; preloading a missing path makes ld.so fail every benchmark,
             // so skip (and note) absent entries instead.
             var preloadLibraries: [String] = []
-            for library in [swiftRuntimeInterposerLib, interposerLib] {
+            for library in libraries {
                 if FileManager.default.fileExists(atPath: library) {
                     preloadLibraries.append(library)
                 } else {

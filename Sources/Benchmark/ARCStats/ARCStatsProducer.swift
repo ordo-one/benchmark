@@ -8,7 +8,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
-#if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
 import SwiftRuntimeInterposerSwift
 #else
 import Atomics
@@ -18,7 +18,7 @@ import SwiftRuntimeHooks
 // swiftlint:disable prefer_self_in_static_references
 
 final class ARCStatsProducer {
-    #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+    #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
     static let usesPreloadedInterposer = true
 
     static func hook() {
