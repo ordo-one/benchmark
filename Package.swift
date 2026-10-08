@@ -13,10 +13,11 @@ let mallocInterposerDependency: Package.Dependency = {
     {
         return .package(path: localPath)
     }
-    // TODO: switch back to the published URL once the allocation hook
-    // (malloc_interposer_set_allocation_hook) is released:
-    // .package(url: "https://github.com/ordo-one/malloc-interposer.git", .upToNextMajor(from: "1.4.0"))
-    return .package(path: "../malloc-interposer")
+    // 1.5.0 adds the per-allocation hook used by --allocation-stacks.
+    return .package(
+        url: "https://github.com/ordo-one/malloc-interposer.git",
+        .upToNextMajor(from: "1.5.0")
+    )
 }()
 
 // The malloc interposer is enabled by default. Turn off the "MallocInterposer"
