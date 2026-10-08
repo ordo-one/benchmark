@@ -184,7 +184,7 @@ struct Benchmark: AsyncParsableCommand {
             Record the stack trace of every allocation in the measured region and print the unique stacks, sorted
             by allocation count (highest first). Recording slows allocations down, so only the malloc count and
             bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
-            the Swift Runtime module (macOS 15+ or Linux).
+            the Swift Runtime module (macOS 26+ or Linux).
             """
     )
     var allocationStacks = false

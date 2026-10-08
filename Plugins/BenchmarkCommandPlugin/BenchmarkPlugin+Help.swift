@@ -79,7 +79,7 @@ let help =
     --allocation-stacks     Record the stack trace of every allocation in the measured region and print the unique stacks, sorted
                             by allocation count (highest first). Recording slows allocations down, so only the malloc count and
                             bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
-                            the Swift Runtime module (macOS 15+ or Linux).
+                            the Swift Runtime module (macOS 26+ or Linux).
     --allocation-stack-depth <allocation-stack-depth>
                             The maximum number of frames captured per allocation stack trace, default is 64
     --allocation-stack-limit <allocation-stack-limit>

@@ -120,9 +120,8 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
     @_documentation(visibility: internal)
     public static func allocationStacksUnsupportedReason() -> String? {
         #if canImport(MallocInterposerSwift) && canImport(Runtime)
-        if AllocationStackRecorder.isAvailable == false {
-            return "--allocation-stacks requires the Swift Runtime library (libswiftRuntime), "
-                + "which this system does not provide."
+        guard #available(macOS 26, *) else {
+            return "--allocation-stacks requires macOS 26 or later."
         }
         return nil
         #else

@@ -49,7 +49,7 @@ Capturing a stack trace makes each allocation several microseconds slower and al
 ### Requirements
 
 - The `MallocInterposer` trait (enabled by default).
-- A toolchain providing the Swift `Runtime` module, and on Apple platforms an OS that ships it (macOS 15 or later).
+- A toolchain providing the Swift `Runtime` module, and on Apple platforms macOS 26 or later.
 
 ### Getting useful stacks
 

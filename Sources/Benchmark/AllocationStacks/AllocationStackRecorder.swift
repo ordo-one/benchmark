@@ -15,10 +15,6 @@ import MallocInterposerSwift
 @_weakLinked import Runtime
 import SwiftRuntimeHooks
 
-#if canImport(Darwin)
-import Darwin
-#endif
-
 // swiftlint:disable prefer_self_in_static_references
 
 /// Records the stack trace of every allocation made while installed, using the malloc
@@ -30,6 +26,7 @@ import Darwin
 ///
 /// Each thread aggregates into its own ``ThreadRecorder`` so the hot path takes only an
 /// uncontended lock.
+@available(macOS 26, *)
 enum AllocationStackRecorder {
     /// Raw aggregated stacks for one thread, keyed by frame addresses.
     final class ThreadRecorder {
@@ -115,15 +112,6 @@ enum AllocationStackRecorder {
 
     static let hook: MallocInterposerSwift.AllocationHook = { size in
         AllocationStackRecorder.recordAllocation(size: size)
-    }
-
-    /// Whether the Swift Runtime library the recorder needs was loaded.
-    static var isAvailable: Bool {
-        #if canImport(Darwin)
-        return dlopen("/usr/lib/swift/libswiftRuntime.dylib", RTLD_NOLOAD) != nil
-        #else
-        return true
-        #endif
     }
 
     /// Prepares the recorder; must be called before ``enable()``, outside of any measured region.

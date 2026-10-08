@@ -124,7 +124,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         }
 
         #if canImport(MallocInterposerSwift) && canImport(Runtime)
-        if let allocationStackDepth {
+        if let allocationStackDepth, #available(macOS 26, *) {
             // The interposer only calls the allocation hook while malloc counting is hooked.
             mallocStatsRequested = true
             AllocationStackRecorder.configure(maxDepth: allocationStackDepth)
@@ -171,7 +171,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         // ARC measurements if initializing it before malloc etc.
         benchmark.measurementPreSynchronization = { explicitStartStop in
             #if canImport(MallocInterposerSwift) && canImport(Runtime)
-            if allocationStacksRequested {
+            if allocationStacksRequested, #available(macOS 26, *) {
                 AllocationStackRecorder.disable()
                 if explicitStartStop, usesExplicitStart == false {
                     // Drop what the first iteration recorded before its explicit startMeasurement().
@@ -216,7 +216,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
             #if canImport(MallocInterposerSwift) && canImport(Runtime)
             // Recording is far slower than the clock read, so it starts after it.
-            if allocationStacksRequested, explicitStartStop || usesExplicitStart == false {
+            if allocationStacksRequested, #available(macOS 26, *), explicitStartStop || usesExplicitStart == false {
                 startNestedAllocations = AllocationStackRecorder.nestedAllocations()
                 AllocationStackRecorder.enable()
             }
@@ -227,7 +227,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         // This closure will only be called once for a given run though.
         benchmark.measurementPostSynchronization = { _ in
             #if canImport(MallocInterposerSwift) && canImport(Runtime)
-            if allocationStacksRequested {
+            if allocationStacksRequested, #available(macOS 26, *) {
                 AllocationStackRecorder.disable()
                 stopNestedAllocations = AllocationStackRecorder.nestedAllocations()
             }
@@ -530,7 +530,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         }
 
         #if canImport(MallocInterposerSwift) && canImport(Runtime)
-        if allocationStacksRequested {
+        if allocationStacksRequested, #available(macOS 26, *) {
             AllocationStackRecorder.disable()
             benchmark.allocationStackReport = AllocationStackSymbolicator.makeReport(
                 iterations: iterations,

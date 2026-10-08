@@ -18,6 +18,7 @@ import Foundation
 /// space) once per unique stack, after the measured run. Frames belonging to the allocator,
 /// the recorder and the benchmark harness are trimmed so each stack starts at the allocation
 /// site and ends at the benchmark closure.
+@available(macOS 26, *)
 enum AllocationStackSymbolicator {
     static func makeReport(iterations: Int, stacks: [AllocationStackRecorder.RawStack]) -> AllocationStackReport {
         let images = ImageMap.capture()
