@@ -71,6 +71,7 @@ import PackagePlugin
         let benchmarkBuildConfiguration = argumentExtractor.extractOption(named: "benchmark-build-configuration")
         let debug = argumentExtractor.extractFlag(named: "debug")
         let scale = argumentExtractor.extractFlag(named: "scale")
+        let allocationStacks = argumentExtractor.extractFlag(named: "allocation-stacks")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
         var outputFormat: OutputFormat = .text
@@ -272,6 +273,22 @@ import PackagePlugin
 
         if scale > 0 {
             args.append(contentsOf: ["--scale"])
+        }
+
+        if allocationStacks > 0 {
+            // A stacks run is a diagnostic pass: time metrics are inflated by
+            // the capture overhead, so baselines recorded from it would be
+            // misleading. Only plain `run` is allowed.
+            guard commandToPerform == .run else {
+                print("--allocation-stacks can only be used with the 'run' command.")
+                throw MyError.invalidArgument
+            }
+            args.append(contentsOf: ["--allocation-stacks"])
+            writeToStderr(
+                "\u{001B}[33mNote: --allocation-stacks records a call stack for every allocation; "
+                    + "time-based metrics are inflated in this mode. "
+                    + "Allocation counts remain exact.\u{001B}[0m\n"
+            )
         }
 
         filterSpecified.forEach { filter in
@@ -521,9 +538,23 @@ import PackagePlugin
                     }
                 }
 
+                var targetBuildParameters = PackageManager.BuildParameters(configuration: mode)
+                #if os(Linux)
+                // dladdr on Linux only resolves symbols from the dynamic
+                // symbol table, so the child-side symbolication of allocation
+                // stacks would yield bare hex addresses for the benchmark's
+                // own frames. Export them when (and only when) a stacks run
+                // was requested. Routed through otherSwiftcFlags because
+                // BuildParameters.otherLinkerFlags is not honored by current
+                // toolchains (verified on 6.3).
+                if allocationStacks > 0 {
+                    targetBuildParameters.otherSwiftcFlags.append(contentsOf: ["-Xlinker", "--export-dynamic"])
+                }
+                #endif
+
                 let buildResult = try packageManager.build(
                     .product(target.name), // .all(includingTests: false),
-                    parameters: .init(configuration: mode)
+                    parameters: targetBuildParameters
                 )
 
                 guard buildResult.succeeded else {

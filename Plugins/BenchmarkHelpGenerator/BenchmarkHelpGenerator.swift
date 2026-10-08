@@ -138,6 +138,19 @@ struct Benchmark: AsyncParsableCommand {
     )
     var scale: Int
 
+    @Flag(
+        name: .long,
+        help:
+            """
+            Capture aggregated allocation call stacks during the measurement windows ('run' command only).
+            Writes one .folded file per benchmark (flamegraph.pl/speedscope compatible, line-diffable between runs)
+            and prints a per-benchmark top-10 summary. Allocation counts stay exact, but time-based metrics are
+            inflated by the capture overhead — don't record baselines from such a run. Requires the MallocInterposer
+            trait and frame pointers (both are the defaults).
+            """
+    )
+    var allocationStacks: Int
+
     @Option(name: .long, help: "Specifies that time related metrics output should be specified units")
     var timeUnits: TimeUnits?
 

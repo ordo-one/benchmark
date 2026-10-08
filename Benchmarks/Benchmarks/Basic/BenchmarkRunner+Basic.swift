@@ -69,7 +69,7 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark(
         "ARCBox",
         configuration: .init(
-            metrics: .arc + [.wallClock],
+            metrics: .arc + [.wallClock, .mallocCountTotal],
             scalingFactor: .kilo
         )
     ) { benchmark in

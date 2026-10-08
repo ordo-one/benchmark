@@ -39,6 +39,7 @@ swift package benchmark <command verb> [<options>]
 - term `--scale`: Show the metrics in the scale of the outer loop only (without applying the inner loop scalingFactor to the output)
 - term `--metric`: Specifies that the benchmark run should use a specific metric instead of the ones defined by the benchmarks
 - term `--no-progress`: Specifies that benchmark progress information should not be displayed
+- term `--allocation-stacks`: Capture aggregated allocation call stacks during the measurement windows (`run` command only). See <doc:RunningBenchmarks#Diagnosing-allocation-regressions-with-allocation-stacks>.
 - term `--check-absolute`: Set to true if thresholds should be checked against an absolute reference point rather than delta between baselines.
 - term `--grouping <grouping>`: The grouping to use, one of: ["metric", "benchmark"]. default is 'benchmark'
 - term `--benchmark-build-configuration <configuration>`: Build configuration to build the benchmark targets with, one of: ["debug", "release"]. Default is "release".
@@ -97,6 +98,11 @@ retainCount, releaseCount, retainReleaseDelta, custom)
 --path <path>           The path to operate on for data export or threshold operations, default is the current directory (".") for exports and the ("./Thresholds") directory for thresholds. 
 --quiet                 Specifies that output should be suppressed (useful for if you just want to check return code)
 --scale                 Specifies that some of the text output should be scaled using the scalingFactor (denoted by '*' in output)
+--allocation-stacks     Capture aggregated allocation call stacks during the measurement windows ('run' command only).
+                      Writes one .folded file per benchmark (flamegraph.pl/speedscope compatible, line-diffable between runs)
+                      and prints a per-benchmark top-10 summary. Allocation counts stay exact, but time-based metrics are
+                      inflated by the capture overhead — don't record baselines from such a run. Requires the MallocInterposer
+                      trait and frame pointers (both are the defaults).
 --time-units <time-units>
 Specifies that time related metrics output should be specified units (values: nanoseconds, microseconds, milliseconds, seconds, kiloseconds, megaseconds)
 --check-absolute        <This is deprecated, use swift package benchmark thresholds updated/check/read instead>
@@ -115,6 +121,29 @@ This implicitly sets --check-absolute to true as well.
 --xswiftc <xswiftc>     Pass an argument to the Swift compiler when building the benchmark
 -h, --help              Show help information.
 ```
+
+## Diagnosing allocation regressions with allocation stacks
+
+When an allocation-count metric (e.g. `mallocCountTotal`) regresses, `--allocation-stacks` shows *where* the allocations come from:
+
+```bash
+swift package --allow-writing-to-package-directory benchmark run --target MyTarget --allocation-stacks
+```
+
+For every allocation inside the measurement windows — and only there, unlike whole-process tools such as Instruments, dtrace, or heaptrack — a call stack is captured and aggregated per unique stack. The run then:
+
+- writes one `<target>.<benchmark>.allocations.folded` file per allocating benchmark to the export path (`--path`, default the current directory). The collapsed/folded format (`frameRoot;frame;frameLeaf count`, one unique stack per line) is consumed directly by [flamegraph.pl](https://github.com/brendangregg/FlameGraph), [speedscope](https://speedscope.app), and similar tools, and is line-diffable — comparing the files from two runs pinpoints exactly which call path gained allocations;
+- prints a per-benchmark summary of the top 10 stacks by allocation count.
+
+All counts and byte totals are per iteration and divided by the benchmark's `scalingFactor` (unless `--scale` is given), exactly like the `mallocCountTotal` metric, so a row in the summary can be read against the metric table directly. Stacks seen less than once per iteration — typically one-time runtime work such as class realization or metadata caching on the first iteration — show their totals for the whole run instead, marked `per run`. Benchmarks that made no allocations are omitted from both outputs.
+
+Things to know:
+
+- This is a diagnostic pass: allocation counts stay exact, but time-based metrics are inflated by the capture overhead — don't record baselines from such a run (the flag is therefore only accepted for the `run` command).
+- Capture requires frame pointers (the default for Swift on all supported platforms) and the `MallocInterposer` trait (also the default). Builds that omit frame pointers yield truncated stacks; stacks that cannot be captured are reported as dropped, never crash the run.
+- `realloc` calls record a stack just like the allocation counters count them.
+- The captured window follows `startMeasurement()`/`stopMeasurement()` exactly like the allocation counters do: setup before an explicit `startMeasurement()` is not reported.
+- Frames are symbolicated from DWARF debug info after the run (`atos` on macOS using the dSYMs next to the build products, `llvm-symbolizer` on Linux), which also expands calls that release-mode optimization inlined — e.g. an `Array.reserveCapacity` allocation shows the exact source line of the `reserveCapacity` call even though no stack frame for it ever existed. Frames without debug info (system libraries, stdlib pre-specializations) fall back to their symbol-table name, or `image+0xoffset` when even that is unavailable (stable across runs, resolvable offline with `llvm-symbolizer --obj=<image> <offset>`).
 
 ## Running benchmarks in Xcode and using Instruments for profiling benchmarks
 

@@ -19,15 +19,20 @@ import OSLog
 // swiftlint:disable file_length
 
 struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
-    init(quiet: Bool = false) {
+    init(quiet: Bool = false, captureAllocationStacks: Bool = false) {
         self.quiet = quiet
+        self.captureAllocationStacks = captureAllocationStacks
     }
 
     var quiet: Bool
+    // Diagnostic mode (--allocation-stacks): record a call stack for every
+    // allocation inside the measurement windows. Allocation counts stay
+    // exact; time-based metrics are inflated by the capture overhead.
+    var captureAllocationStacks: Bool
     let operatingSystemStatsProducer = OperatingSystemStatsProducer()
 
     // swiftlint:disable cyclomatic_complexity function_body_length
-    func run(_ benchmark: Benchmark) -> [BenchmarkResult] {
+    func run(_ benchmark: Benchmark) -> (results: [BenchmarkResult], allocationStacks: AllocationStacksReport?) {
         var wallClockDuration: Duration = .zero
         #if canImport(MallocInterposerSwift)
         var startMallocStats = MallocInterposerSwift.Statistics()
@@ -180,17 +185,46 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
                 startPerformanceCounters = operatingSystemStatsProducer.makePerformanceCounters()
             }
 
+            #if canImport(MallocInterposerSwift)
+            // Last before the timestamp so the other stat reads above don't
+            // pollute the captured stacks. The mark opens the reported
+            // window; on an explicit startMeasurement() this closure runs a
+            // second time and the re-mark discards the benchmark's setup
+            // (and the signpost bookkeeping above), exactly as re-reading
+            // startMallocStats does for the counters.
+            if captureAllocationStacks {
+                MallocInterposerSwift.markAllocationStacks()
+                MallocInterposerSwift.hookAllocationStacks()
+            }
+            #endif
+
             startTime = BenchmarkClock.now // must be as close to last in closure as possible
         }
 
         // And corresponding hook for then the benchmark has finished and capture finishing metrics here
         // This closure will only be called once for a given run though.
         benchmark.measurementPostSynchronization = { _ in
+            #if canImport(MallocInterposerSwift)
+            // First thing on the way out, mirroring the hook above, so the
+            // captured stacks match exactly the malloc-delta window.
+            if captureAllocationStacks {
+                MallocInterposerSwift.unhookAllocationStacks()
+            }
+            #endif
+
             if performanceCountersRequested {
                 stopPerformanceCounters = operatingSystemStatsProducer.makePerformanceCounters()
             }
 
             stopTime = BenchmarkClock.now // must be as close to first in closure as possible (perf events only before)
+
+            #if canImport(MallocInterposerSwift)
+            // Close the reported window (capture is already off, so this
+            // sees exactly the allocations between the last mark and here).
+            if captureAllocationStacks {
+                MallocInterposerSwift.commitAllocationStacks()
+            }
+            #endif
 
             if operatingSystemStatsRequested {
                 stopOperatingSystemStats = operatingSystemStatsProducer.makeOperatingSystemStats()
@@ -377,6 +411,17 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             #endif
         }
 
+        #if canImport(MallocInterposerSwift)
+        if captureAllocationStacks {
+            // Capture piggybacks on the counting gate in the interposer, so
+            // counting must be on even when no malloc metric was requested.
+            if mallocStatsRequested == false {
+                MallocInterposerSwift.hook()
+            }
+            MallocInterposerSwift.resetAllocationStacks()
+        }
+        #endif
+
         if benchmark.configuration.metrics.contains(.threads)
             || benchmark.configuration.metrics.contains(.threadsRunning)
             || benchmark.configuration.metrics.contains(.peakMemoryResident)
@@ -432,7 +477,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             }
 
             if benchmark.failureReason != nil {
-                return []
+                return ([], nil)
             }
 
             benchmark.currentIteration = iterations + benchmark.configuration.warmupIterations
@@ -466,6 +511,25 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         if arcStatsRequested {
             ARCStatsProducer.unhook()
         }
+
+        var allocationStacksReport: AllocationStacksReport?
+        #if canImport(MallocInterposerSwift)
+        if captureAllocationStacks {
+            // Defensive: the post-synchronization hook already disabled
+            // capture after the last iteration; make sure it is off before
+            // the (freely allocating) symbolication below.
+            MallocInterposerSwift.unhookAllocationStacks()
+            if mallocStatsRequested == false {
+                MallocInterposerSwift.unhook()
+            }
+            var symbolicator = AllocationStackSymbolicator()
+            allocationStacksReport = symbolicator.makeReport(
+                from: MallocInterposerSwift.getAllocationStacks(),
+                iterations: iterations,
+                scalingFactor: benchmark.configuration.scalingFactor.rawValue
+            )
+        }
+        #endif
 
         if mallocStatsRequested {
             #if canImport(MallocInterposerSwift)
@@ -546,7 +610,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         // sort on metric descriptions for now to get predicatable output on screen
         results.sort(by: { $0.metric.description > $1.metric.description })
 
-        return results
+        return (results, allocationStacksReport)
     }
 }
 

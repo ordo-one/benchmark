@@ -40,4 +40,17 @@ For more information on using this output within continuous integration, see the
 - term `influx`: A single file is generated with the file name extension `csv` with the values encoded as metrics using the [Influx Line Protocol](https://docs.influxdata.com/influxdb/v1.8/write_protocols/line_protocol_reference/).
 - term `jmh`: A single file is generated with the file name extension `jmh` encoded in the [java microbenchmark harness](https://openjdk.org/projects/code-tools/jmh/) format. You can quickly compare the contained metrics by dropping the file into the [JMH visualizer](https://jmh.morethan.io) using a browser.
 
+### Allocation call stacks (`--allocation-stacks`)
+
+Running with the `--allocation-stacks` flag (independent of `--format`, `run` command only) additionally writes one file per benchmark that allocated, named `<target>.<benchmark>.allocations.folded`, to the export path. Each line is one unique allocation call stack in collapsed/folded format — `frameRoot;frame;frameLeaf count` — sorted by allocation count, containing every allocation made inside the measurement windows. Counts are per iteration and divided by the benchmark's `scalingFactor` unless `--scale` is given, like the `mallocCountTotal` metric, so files from runs with different iteration counts still line up (a stack seen less than once per iteration is reported as 1 rather than disappearing).
+
+The folded format is directly consumable by [flamegraph.pl](https://github.com/brendangregg/FlameGraph) (including differential flamegraphs via `difffolded.pl`) and [speedscope](https://speedscope.app):
+
+```bash
+swift package --allow-writing-to-package-directory benchmark run --target MyTarget --allocation-stacks
+flamegraph.pl MyTarget.MyBenchmark.allocations.folded > allocations.svg
+```
+
+Because the format is line-based, diffing the files from two runs (before/after a change) pinpoints exactly which call path gained or lost allocations. See <doc:RunningBenchmarks#Diagnosing-allocation-regressions-with-allocation-stacks> for the semantics and caveats of the capture mode.
+
 

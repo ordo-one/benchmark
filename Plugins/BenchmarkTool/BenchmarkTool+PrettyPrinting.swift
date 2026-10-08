@@ -227,6 +227,7 @@ extension BenchmarkTool {
                             firstOutput = false
                         }
                         _prettyPrint(title: "Metric", key: benchmarkName, results: results, width: width)
+                        printAllocationStacks(for: BenchmarkIdentifier(target: target, name: benchmarkName))
                     }
                 }
             }

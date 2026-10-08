@@ -59,6 +59,11 @@ let help =
     --path <path>           The path to operate on for data export or threshold operations, default is the current directory (".") for exports and the ("./Thresholds") directory for thresholds.
     --quiet                 Specifies that output should be suppressed (useful for if you just want to check return code)
     --scale                 Specifies that some of the text output should be scaled using the scalingFactor (denoted by '*' in output)
+    --allocation-stacks     Capture aggregated allocation call stacks during the measurement windows ('run' command only).
+                          Writes one .folded file per benchmark (flamegraph.pl/speedscope compatible, line-diffable between runs)
+                          and prints a per-benchmark top-10 summary. Allocation counts stay exact, but time-based metrics are
+                          inflated by the capture overhead — don't record baselines from such a run. Requires the MallocInterposer
+                          trait and frame pointers (both are the defaults).
     --time-units <time-units>
                           Specifies that time related metrics output should be specified units (values: nanoseconds, microseconds, milliseconds, seconds, kiloseconds, megaseconds)
     --check-absolute        <This is deprecated, use swift package benchmark thresholds updated/check/read instead>

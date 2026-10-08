@@ -113,6 +113,17 @@ struct BenchmarkTool: AsyncParsableCommand {
     )
     var checkAbsolutePath: String?
 
+    @Flag(
+        name: .long,
+        help:
+            """
+            Capture aggregated allocation call stacks during the measurement windows (diagnostic pass).
+            Writes one .folded file per benchmark and prints a per-benchmark top-10 summary.
+            Allocation counts stay exact; time-based metrics are inflated by the capture overhead.
+            """
+    )
+    var allocationStacks = false
+
     @Option(name: .long, help: "The named baseline(s) we should display, update, delete or compare with")
     var baseline: [String] = []
 
@@ -132,6 +143,8 @@ struct BenchmarkTool: AsyncParsableCommand {
     var outputFD: CInt = 0
 
     var benchmarks: [Benchmark] = []
+    var allocationStacksReports: [BenchmarkIdentifier: AllocationStacksReport] = [:]
+    var allocationStacksSymbolicator: DWARFSymbolicator? // built once, before results are printed
     var benchmarkBaselines: [BenchmarkBaseline] = [] // The baselines read from disk, merged + current run if needed
     var comparisonBaseline: BenchmarkBaseline?
     var checkBaseline: BenchmarkBaseline?
@@ -312,6 +325,17 @@ struct BenchmarkTool: AsyncParsableCommand {
 
         if quiet == false, format == .text {
             "Running Benchmarks".printAsHeader()
+
+            if allocationStacks {
+                print(
+                    """
+                    Note: --allocation-stacks records a call stack for every allocation inside the \
+                    measurement windows. Allocation counts remain exact, but time-based metrics are \
+                    inflated by the capture overhead and must not be compared against baselines.
+                    """
+                )
+                print("")
+            }
         }
 
         var benchmarkResults: BenchmarkResults = [:]
@@ -408,6 +432,10 @@ struct BenchmarkTool: AsyncParsableCommand {
 
         if checkAbsolute {
             args.append("--check-absolute")
+        }
+
+        if allocationStacks {
+            args.append("--allocation-stacks")
         }
 
         if let timeUnits {

@@ -94,6 +94,15 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
     )
     var suppressMetricWarnings = false
 
+    @Flag(
+        name: .long,
+        help: """
+            Capture aggregated allocation call stacks during the measurement windows (diagnostic pass; \
+            allocation counts stay exact, time-based metrics are inflated by the capture overhead).
+            """
+    )
+    var allocationStacks = false
+
     var debug = false
 
     func shouldRunBenchmark(_ name: String) throws -> Bool {
@@ -135,9 +144,23 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
         #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
         SwiftRuntimeInterposerSwift.initialize()
         #endif
-        let benchmarkExecutor = BenchmarkExecutor(quiet: quiet)
+        #if !canImport(MallocInterposerSwift)
+        if allocationStacks {
+            let description =
+                "--allocation-stacks requires the MallocInterposer trait; "
+                + "rebuild without BENCHMARK_DISABLE_MALLOC_INTERPOSER/--disable-default-traits."
+            if debug {
+                print(description)
+            } else {
+                try channel.write(.error(description))
+            }
+            return
+        }
+        #endif
+        let benchmarkExecutor = BenchmarkExecutor(quiet: quiet, captureAllocationStacks: allocationStacks)
         var benchmark: Benchmark?
         var results: [BenchmarkResult] = []
+        var allocationStacksReport: AllocationStacksReport?
 
         let suppressor = OutputSuppressor()
 
@@ -260,7 +283,7 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
                             try suppressor.suppressOutput()
                         }
 
-                        results = benchmarkExecutor.run(benchmark)
+                        (results, allocationStacksReport) = benchmarkExecutor.run(benchmark)
 
                         if quiet {
                             try suppressor.restoreOutput()
@@ -297,6 +320,10 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
                     // reporting results back
                     if results.isEmpty == false {
                         try channel.write(.result(benchmark: benchmark, results: results))
+                    }
+
+                    if let report = allocationStacksReport {
+                        try channel.write(.allocationStacks(benchmark: benchmark, report: report))
                     }
 
                     // Minimal output for debugging

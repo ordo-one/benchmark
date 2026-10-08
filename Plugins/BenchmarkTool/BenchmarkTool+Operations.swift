@@ -60,6 +60,8 @@ extension BenchmarkTool {
             case .result(benchmark: let benchmark, results: let results):
                 let filteredResults = results.filter { benchmark.configuration.metrics.contains($0.metric) }
                 benchmarkResults[BenchmarkIdentifier(target: target, name: benchmark.name)] = filteredResults
+            case .allocationStacks(benchmark: let benchmark, report: let report):
+                allocationStacksReports[BenchmarkIdentifier(target: target, name: benchmark.name)] = report
             case .end:
                 break outerloop
             case .error(let description):
@@ -427,7 +429,16 @@ extension BenchmarkTool {
                 fatalError("Internal error, no baseline data after benchmark run.")
             }
 
+            // Symbolicate before printing: with per-benchmark grouping the
+            // stacks table is printed right under each benchmark's metrics.
+            if allocationStacksReports.isEmpty == false {
+                allocationStacksSymbolicator = makeAllocationStacksSymbolicator()
+            }
             try exportResults(baseline: baseline)
+            if let symbolicator = allocationStacksSymbolicator {
+                try exportAllocationStacks(symbolicator: symbolicator)
+                printAllocationStacksSummary(symbolicator: symbolicator)
+            }
         case .query:
             break
         case .list:

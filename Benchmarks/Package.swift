@@ -94,3 +94,19 @@ package.targets += [
         ]
     )
 ]
+
+// Exercises --allocation-stacks: each benchmark produces a known set of
+// allocation call stacks (documented in the source) so the per-benchmark
+// summary and the .folded export can be checked by eye.
+package.targets += [
+    .executableTarget(
+        name: "AllocationStacksBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/AllocationStacks",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]

@@ -26,6 +26,9 @@ public enum BenchmarkCommandReply: Codable {
     case list(benchmark: Benchmark)
     case ready
     case result(benchmark: Benchmark, results: [BenchmarkResult]) // receives results from built-in metric collectors
+    // aggregated allocation call stacks captured with --allocation-stacks (kept out of
+    // .result so diagnostic data never leaks into baseline storage or the exporters)
+    case allocationStacks(benchmark: Benchmark, report: AllocationStacksReport)
     case run
     case end // end of query for list/result
     case error(_ description: String) // error while performing operation (e.g. 'run')
