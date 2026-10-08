@@ -9,14 +9,6 @@
 
 import Benchmark
 
-final class Node {
-    var value: Int
-
-    init(_ value: Int) {
-        self.value = value
-    }
-}
-
 @inline(never)
 func allocateTwice() {
     // One allocation site, so both allocations share a stack.

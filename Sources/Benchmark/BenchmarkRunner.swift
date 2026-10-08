@@ -44,7 +44,7 @@ public extension BenchmarkRunnerHooks {
 }
 
 @_documentation(visibility: internal)
-public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
+public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite { // swiftlint:disable:this type_body_length
     static var testReadWrite: BenchmarkRunnerReadWrite?
 
     public init() {}

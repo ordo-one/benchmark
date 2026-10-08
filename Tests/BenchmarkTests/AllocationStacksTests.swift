@@ -8,6 +8,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
+// Swift Testing ships with Swift 6 toolchains; older ones skip these tests.
+#if canImport(Testing)
 import Foundation
 import Testing
 
@@ -197,3 +199,4 @@ struct AllocationStacksTests {
     }
     #endif
 }
+#endif

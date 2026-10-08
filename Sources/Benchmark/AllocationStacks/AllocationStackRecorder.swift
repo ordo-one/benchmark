@@ -30,15 +30,8 @@ import SwiftRuntimeHooks
 enum AllocationStackRecorder {
     /// Raw aggregated stacks for one thread, keyed by frame addresses.
     final class ThreadRecorder {
-        struct Entry {
-            var count: Int
-            var bytes: Int
-            /// The first backtrace seen for this stack, kept for symbolication.
-            var backtrace: Backtrace
-        }
-
         let lock = NIOLock()
-        var stacks: [[UInt]: Entry] = [:]
+        var stacks: [[UInt]: RawStack] = [:]
         // Only touched by the owning thread, so it lives outside the lock and keeps its capacity.
         var scratch: [UInt] = []
         /// Allocations made by the hook itself on this thread (count and bytes).
@@ -84,16 +77,17 @@ enum AllocationStackRecorder {
                     stacks.values[index].count += 1
                     stacks.values[index].bytes += size
                 } else {
-                    stacks[scratch] = Entry(count: 1, bytes: size, backtrace: backtrace)
+                    stacks[scratch] = RawStack(count: 1, bytes: size, backtrace: backtrace)
                 }
             }
         }
     }
 
-    /// A merged, not yet symbolicated stack.
+    /// An aggregated, not yet symbolicated stack.
     struct RawStack {
         var count: Int
         var bytes: Int
+        /// The first backtrace seen for this stack, kept for symbolication.
         var backtrace: Backtrace
     }
 
@@ -222,7 +216,7 @@ enum AllocationStackRecorder {
                             merged.values[index].count += entry.count
                             merged.values[index].bytes += entry.bytes
                         } else {
-                            merged[key] = RawStack(count: entry.count, bytes: entry.bytes, backtrace: entry.backtrace)
+                            merged[key] = entry
                         }
                     }
                 }
