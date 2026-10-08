@@ -33,11 +33,35 @@ Only the measured region is recorded. Warmup iterations and anything before `sta
 
 ### Options
 
-- term `--allocation-stacks`: Record and print the allocation stacks.
+- term `--allocation-stacks`: Record and print the allocation stacks. With `--path`, also export JSON and folded files for flamegraph.pl or speedscope.
 - term `--allocation-stack-depth <depth>`: The maximum number of frames captured per stack, default is 64. Deeper stacks are truncated at the innermost frames.
 - term `--allocation-stack-limit <limit>`: The maximum number of stacks printed per benchmark, `0` for all, default is 20.
 
-With `--format markdown` the stacks are printed as markdown. With `--path <path>` the full reports are also written as JSON, one `<target>.<benchmark>.allocations.json` file per benchmark (with `--path stdout`, only the JSON is printed).
+With `--format markdown` the stacks are printed as markdown. With `--path <path>` the full reports are also written as JSON, one `<target>.<benchmark>.allocations.json` file per benchmark (with `--path stdout`, only the JSON is printed and no folded files are written).
+
+### Folded stack export
+
+With `--path <directory>`, each benchmark that records allocations also writes a `<target>.<benchmark>.allocations.folded` file alongside its JSON report. Without `--path`, no files are written. Grant the command plugin write permission for the destination (`--allow-writing-to-package-directory` for output inside the package, or `--allow-writing-to-directory <path>` for an external directory):
+
+```sh
+swift package --allow-writing-to-package-directory benchmark run \
+    --allocation-stacks --target MyBenchmarks --filter "Encode.*" --path allocation-stacks
+```
+
+The files contain all captured stacks, regardless of `--allocation-stack-limit`. Frames run from the outermost caller to the allocation site, separated by semicolons, with the allocation count at the end:
+
+```
+benchmark();encode() at Encoder.swift:33;swift_allocObject in libswiftCore.dylib 2000
+benchmark();flush() [async] at Encoder.swift:44;swift_slowAlloc in libswiftCore.dylib 1000
+```
+
+Weights are exact allocation totals across all measured iterations, matching the JSON report, independent of `--scale`. Keeping integer run totals preserves rare allocations and compatibility with speedscope. Identical rendered stacks are merged, and equal counts are ordered by their frame labels so output is deterministic. Semicolons inside frame labels become commas and embedded newlines become spaces.
+
+Open the file in [speedscope](https://www.speedscope.app), or render it with [FlameGraph](https://github.com/brendangregg/FlameGraph):
+
+```sh
+flamegraph.pl --countname allocations --title "Allocation stacks" allocation-stacks/MyBenchmarks.Encode.allocations.folded > allocations.svg
+```
 
 ### Overhead and metrics
 

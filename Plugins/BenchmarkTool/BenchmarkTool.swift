@@ -128,7 +128,7 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "Benchmarks matching the regexp filter that should be skipped")
     var skip: [String] = []
 
-    @Flag(name: .long, help: "True if the stack traces of all allocations should be recorded and reported")
+    @Flag(name: .long, help: "Record allocation stacks and print them; with --path, export JSON and folded stack files")
     var allocationStacks = false
 
     @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace")

@@ -166,6 +166,8 @@ swift package benchmark run --allocation-stacks --target MyBenchmarks --filter "
 ```
 Recording slows allocations down, so only the malloc count/bytes metrics are measured in this mode.
 
+With `--path <directory>`, each non-empty benchmark also writes a `.allocations.folded` file for flamegraph.pl or speedscope alongside its JSON report, containing exact allocation totals for every captured stack. Grant the plugin write permission for the destination. Without `--path`, no files are written; `--path stdout` continues to export JSON only.
+
 ## Swift 6 support
 The package supports Swift 6.0 benchmark targets as well as Swift 5.10 targets (for Swift 5.9 support, need to use version 1.28.0 exactly).
 

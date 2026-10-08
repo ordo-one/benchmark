@@ -185,6 +185,8 @@ struct Benchmark: AsyncParsableCommand {
             by allocation count (highest first). Recording slows allocations down, so only the malloc count and
             bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
             the Swift Runtime module (macOS 26+ or Linux).
+            With --path, exports JSON and a .allocations.folded file per non-empty benchmark.
+            With --path stdout, exports JSON only.
             """
     )
     var allocationStacks = false
