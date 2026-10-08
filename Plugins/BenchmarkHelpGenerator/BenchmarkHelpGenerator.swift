@@ -177,6 +177,24 @@ struct Benchmark: AsyncParsableCommand {
     )
     var grouping: Grouping
 
+    @Flag(
+        name: .long,
+        help:
+            """
+            Record the stack trace of every allocation in the measured region and print the unique stacks, sorted
+            by allocation count (highest first). Recording slows allocations down, so only the malloc count and
+            bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
+            the Swift Runtime module (macOS 15+ or Linux).
+            """
+    )
+    var allocationStacks = false
+
+    @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace, default is 64")
+    var allocationStackDepth: Int?
+
+    @Option(name: .long, help: "The maximum number of allocation stacks printed per benchmark, 0 for all, default is 20")
+    var allocationStackLimit: Int?
+
     @Option(name: .long, help: "Pass an argument to the Swift compiler when building the benchmark")
     var Xswiftc: String
 

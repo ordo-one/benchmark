@@ -159,6 +159,13 @@ Using [jmh.morethan.io](https://jmh.morethan.io)
 
 <img width="1482" alt="image" src="https://user-images.githubusercontent.com/8501048/225313559-33014755-797f-4ddf-b536-24c1a618f271.png">
 
+### Finding allocation sites
+To see *where* a benchmark allocates, run it with `--allocation-stacks`. The stack trace of every allocation in the measured region is recorded and the unique stacks are printed sorted by allocation count:
+```
+swift package benchmark run --allocation-stacks --target MyBenchmarks --filter "Encode.*"
+```
+Recording slows allocations down, so only the malloc count/bytes metrics are measured in this mode.
+
 ## Swift 6 support
 The package supports Swift 6.0 benchmark targets as well as Swift 5.10 targets (for Swift 5.9 support, need to use version 1.28.0 exactly).
 

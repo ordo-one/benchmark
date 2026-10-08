@@ -55,6 +55,7 @@ final class BenchmarkRunnerTests: XCTestCase, BenchmarkRunnerReadWrite {
         runner.debug = false
         runner.quiet = false
         runner.timeUnits = .nanoseconds
+        runner.allocationStacks = false
         try await runner.run()
         XCTAssertEqual(writeCount, 6) // 3 tests results + 3 end markers
     }

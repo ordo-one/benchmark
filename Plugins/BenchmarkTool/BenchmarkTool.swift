@@ -128,6 +128,15 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "Benchmarks matching the regexp filter that should be skipped")
     var skip: [String] = []
 
+    @Flag(name: .long, help: "True if the stack traces of all allocations should be recorded and reported")
+    var allocationStacks = false
+
+    @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace")
+    var allocationStackDepth: Int?
+
+    @Option(name: .long, help: "The maximum number of allocation stacks reported per benchmark, 0 for all")
+    var allocationStackLimit: Int = 20
+
     var inputFD: CInt = 0
     var outputFD: CInt = 0
 
@@ -135,6 +144,7 @@ struct BenchmarkTool: AsyncParsableCommand {
     var benchmarkBaselines: [BenchmarkBaseline] = [] // The baselines read from disk, merged + current run if needed
     var comparisonBaseline: BenchmarkBaseline?
     var checkBaseline: BenchmarkBaseline?
+    var allocationStackReports: [BenchmarkIdentifier: AllocationStackReport] = [:]
 
     var failedBenchmarkList: [String] = []
 
@@ -235,6 +245,12 @@ struct BenchmarkTool: AsyncParsableCommand {
         guard command != .`init` else {
             createBenchmarkTarget()
             return
+        }
+
+        // Fail before running anything
+        if allocationStacks, let reason = BenchmarkRunner.allocationStacksUnsupportedReason() {
+            print(reason)
+            exitBenchmark(exitCode: .genericFailure)
         }
 
         // Skip reading baselines for baseline operations not needing them
@@ -347,6 +363,10 @@ struct BenchmarkTool: AsyncParsableCommand {
 
         try postProcessBenchmarkResults()
 
+        if allocationStacks {
+            try reportAllocationStacks()
+        }
+
         if failedBenchmarkRuns > 0 {
             exitBenchmark(exitCode: .benchmarkJobFailed)
         }
@@ -412,6 +432,14 @@ struct BenchmarkTool: AsyncParsableCommand {
 
         if let timeUnits {
             args.append(contentsOf: ["--time-units", timeUnits.rawValue])
+        }
+
+        // Only the run itself records stacks; the child would reject the flag for other commands' replies.
+        if allocationStacks, benchmarkCommand == .run {
+            args.append("--allocation-stacks")
+            if let allocationStackDepth {
+                args.append(contentsOf: ["--allocation-stack-depth", allocationStackDepth.description])
+            }
         }
 
         inputFD = fromChild.readEnd.rawValue

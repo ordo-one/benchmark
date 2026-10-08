@@ -134,3 +134,44 @@ void swift_runtime_set_release_hook(swift_runtime_hook_t hook, void * context) {
         _swift_release_n = _swift_release_n_hook;
     }
 }
+
+/*===========================================================================*/
+
+// Darwin lazily allocates _Thread_local storage with malloc on a thread's first
+// access, which would re-enter the allocation hook before its guard is set, so
+// use a pthread key there (pthread_getspecific/setspecific use static slots).
+// On Linux __thread in the executable is static TLS and never allocates.
+#if __APPLE__
+#include <pthread.h>
+
+static pthread_key_t _allocation_hook_state_key;
+static pthread_once_t _allocation_hook_state_once = PTHREAD_ONCE_INIT;
+
+static void _allocation_hook_state_create_key(void) {
+    pthread_key_create(&_allocation_hook_state_key, NULL);
+}
+
+void benchmark_allocation_hook_state_initialize(void) {
+    pthread_once(&_allocation_hook_state_once, _allocation_hook_state_create_key);
+}
+
+uintptr_t benchmark_allocation_hook_state_get(void) {
+    return (uintptr_t)pthread_getspecific(_allocation_hook_state_key);
+}
+
+void benchmark_allocation_hook_state_set(uintptr_t state) {
+    pthread_setspecific(_allocation_hook_state_key, (const void *)state);
+}
+#else
+static __thread uintptr_t _allocation_hook_state = 0;
+
+void benchmark_allocation_hook_state_initialize(void) {}
+
+uintptr_t benchmark_allocation_hook_state_get(void) {
+    return _allocation_hook_state;
+}
+
+void benchmark_allocation_hook_state_set(uintptr_t state) {
+    _allocation_hook_state = state;
+}
+#endif

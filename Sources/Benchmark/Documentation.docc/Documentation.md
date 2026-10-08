@@ -30,6 +30,7 @@ Thanks to the use of [Histogram](https://github.com/ordo-one/package-histogram) 
 - <doc:WritingBenchmarks>
 - <doc:Metrics>
 - <doc:RunningBenchmarks>
+- <doc:AllocationStacks>
 - <doc:CreatingAndComparingBaselines>
 - <doc:ComparingBenchmarksCI>
 - <doc:ExportingBenchmarks>

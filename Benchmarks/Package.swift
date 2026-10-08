@@ -94,3 +94,17 @@ package.targets += [
         ]
     )
 ]
+
+// Integration coverage for `--allocation-stacks`
+package.targets += [
+    .executableTarget(
+        name: "AllocationStacksBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/AllocationStacks",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
