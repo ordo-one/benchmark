@@ -44,7 +44,7 @@ public extension BenchmarkRunnerHooks {
 }
 
 @_documentation(visibility: internal)
-public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
+public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite { // swiftlint:disable:this type_body_length
     static var testReadWrite: BenchmarkRunnerReadWrite?
 
     public init() {}
@@ -94,7 +94,40 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
     )
     var suppressMetricWarnings = false
 
+    @Flag(
+        name: .long,
+        help: """
+            Record the stack trace of every allocation in the measured region and report the unique \
+            stacks sorted by allocation count. Only malloc count/bytes metrics are measured in this mode.
+            """
+    )
+    var allocationStacks = false
+
+    @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace.")
+    var allocationStackDepth = 64
+
+    @Option(name: .long, help: "The maximum number of allocation stacks printed per benchmark in debug runs, 0 for all.")
+    var allocationStackLimit = 20
+
+    /// The metrics measured with `--allocation-stacks`: recording perturbs everything else, and these
+    /// two have the stack recorder's own allocations subtracted.
+    static let allocationStackMetrics: [BenchmarkMetric] = [.mallocCountTotal, .mallocBytesCount]
+
     var debug = false
+
+    /// Why `--allocation-stacks` can't run in this build or on this system, or `nil` if it can.
+    /// Also checked by `BenchmarkTool` up front, so an unsupported system fails before any run.
+    @_documentation(visibility: internal)
+    public static func allocationStacksUnsupportedReason() -> String? {
+        #if canImport(MallocInterposerSwift) && canImport(Runtime)
+        guard #available(macOS 26, *) else {
+            return "--allocation-stacks requires macOS 26 or later."
+        }
+        return nil
+        #else
+        return "--allocation-stacks requires the MallocInterposer trait and a toolchain providing the Swift Runtime module."
+        #endif
+    }
 
     func shouldRunBenchmark(_ name: String) throws -> Bool {
         if try skip.contains(where: { try name.wholeMatch(of: Regex($0)) != nil }) {
@@ -135,7 +168,20 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
         #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
         SwiftRuntimeInterposerSwift.initialize()
         #endif
-        let benchmarkExecutor = BenchmarkExecutor(quiet: quiet)
+        if allocationStacks, let unsupportedReason = Self.allocationStacksUnsupportedReason() {
+            if debug {
+                writeToStandardError(unsupportedReason)
+                throw ArgumentParser.ExitCode(BenchmarkShared.ExitCode.genericFailure.rawValue)
+            } else {
+                _ = try channel.read()
+                try channel.write(.error(unsupportedReason))
+            }
+            return
+        }
+        let benchmarkExecutor = BenchmarkExecutor(
+            quiet: quiet,
+            allocationStackDepth: allocationStacks ? allocationStackDepth : nil
+        )
         var benchmark: Benchmark?
         var results: [BenchmarkResult] = []
 
@@ -193,6 +239,10 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
 
                     if debug, allMetrics {
                         benchmark.configuration.metrics = .all
+                    }
+
+                    if allocationStacks {
+                        benchmark.configuration.metrics = Self.allocationStackMetrics
                     }
 
                     // Re-check unsupported metrics now that CLI `--metric` overrides are merged: a
@@ -291,6 +341,15 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite {
                     guard benchmark.failureReason == nil else {
                         try channel.write(.error(benchmark.failureReason!))
                         return
+                    }
+
+                    if let report = benchmark.allocationStackReport {
+                        try channel.write(.allocationStacks(benchmark: benchmark, report: report))
+                        if debug {
+                            let limit = allocationStackLimit > 0 ? allocationStackLimit : nil
+                            print(report.formatted(title: benchmark.name, limit: limit))
+                            print("")
+                        }
                     }
 
                     // If we didn't capture any results for the desired metrics (e.g. an empty metric list), skip

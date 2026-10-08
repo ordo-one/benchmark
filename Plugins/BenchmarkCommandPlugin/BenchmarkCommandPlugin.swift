@@ -73,6 +73,9 @@ import PackagePlugin
         let scale = argumentExtractor.extractFlag(named: "scale")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
+        let allocationStacks = argumentExtractor.extractFlag(named: "allocation-stacks")
+        let allocationStackDepth = argumentExtractor.extractOption(named: "allocation-stack-depth")
+        let allocationStackLimit = argumentExtractor.extractOption(named: "allocation-stack-limit")
         var outputFormat: OutputFormat = .text
         var grouping = "benchmark"
         var exportPath = "."
@@ -112,6 +115,32 @@ import PackagePlugin
             print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
             print("")
             exit(0)
+        }
+
+        var allocationStackArgs: [String] = []
+        if allocationStacks > 0 {
+            // Recording stacks slows every allocation down, so the results must not end up in
+            // baselines or threshold checks.
+            guard commandToPerform == .run, checkAbsoluteThresholds == 0 else {
+                print("--allocation-stacks can only be used with the 'run' command.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append("--allocation-stacks")
+            for (option, values) in [
+                ("allocation-stack-depth", allocationStackDepth), ("allocation-stack-limit", allocationStackLimit),
+            ] {
+                guard let value = values.first else {
+                    continue
+                }
+                guard let number = Int(value), number >= 0, option != "allocation-stack-depth" || number > 0 else {
+                    print("Invalid value '\(value)' for --\(option).")
+                    throw MyError.invalidArgument
+                }
+                allocationStackArgs.append(contentsOf: ["--\(option)", String(number)])
+            }
+        } else if allocationStackDepth.isEmpty == false || allocationStackLimit.isEmpty == false {
+            print("--allocation-stack-depth and --allocation-stack-limit require --allocation-stacks.")
+            throw MyError.invalidArgument
         }
 
         if pathSpecified.count > 0 {
@@ -273,6 +302,8 @@ import PackagePlugin
         if scale > 0 {
             args.append(contentsOf: ["--scale"])
         }
+
+        args.append(contentsOf: allocationStackArgs)
 
         filterSpecified.forEach { filter in
             args.append(contentsOf: ["--filter", filter])

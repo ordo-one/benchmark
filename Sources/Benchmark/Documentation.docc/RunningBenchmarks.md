@@ -42,6 +42,9 @@ swift package benchmark <command verb> [<options>]
 - term `--check-absolute`: Set to true if thresholds should be checked against an absolute reference point rather than delta between baselines.
 - term `--grouping <grouping>`: The grouping to use, one of: ["metric", "benchmark"]. default is 'benchmark'
 - term `--benchmark-build-configuration <configuration>`: Build configuration to build the benchmark targets with, one of: ["debug", "release"]. Default is "release".
+- term `--allocation-stacks`: Record the stack trace of every allocation in the measured region and print the unique stacks sorted by allocation count, see <doc:AllocationStacks>.
+- term `--allocation-stack-depth <depth>`: The maximum number of frames captured per allocation stack trace, default is 64.
+- term `--allocation-stack-limit <limit>`: The maximum number of allocation stacks printed per benchmark, `0` for all, default is 20.
 
 ## Usage
 
