@@ -128,8 +128,17 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "Benchmarks matching the regexp filter that should be skipped")
     var skip: [String] = []
 
-    @Flag(name: .long, help: "Record allocation stacks and print them; with --path, export JSON and folded stack files")
+    @Flag(name: .long, help: "Record allocation stacks and print them")
     var allocationStacks = false
+
+    @Flag(name: .long, help: "Record and export allocation stacks to --allocation-stacks-export-path")
+    var exportAllocationStacks = false
+
+    @Option(name: .long, help: "The allocation stack export format: folded or json (default: folded)")
+    var allocationStacksExportFormat: AllocationStacksExportFormat?
+
+    @Option(name: .long, help: "The allocation stack export directory, or stdout (default: current directory)")
+    var allocationStacksExportPath: String?
 
     @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace")
     var allocationStackDepth: Int?
@@ -235,6 +244,31 @@ struct BenchmarkTool: AsyncParsableCommand {
             } else {
                 failBenchmark("Failed to load specified baseline '\(baselineName)'.", exitCode: .baselineNotFound)
             }
+        }
+    }
+
+    var allocationStacksToStdout: Bool {
+        exportAllocationStacks && allocationStacksExportPath == "stdout"
+    }
+
+    mutating func validate() throws {
+        if allocationStacksExportFormat != nil, exportAllocationStacks == false {
+            throw ValidationError("--allocation-stacks-export-format requires --export-allocation-stacks.")
+        }
+        if allocationStacksExportPath != nil, exportAllocationStacks == false {
+            throw ValidationError("--allocation-stacks-export-path requires --export-allocation-stacks.")
+        }
+        if exportAllocationStacks {
+            allocationStacks = true
+        }
+        if allocationStacks {
+            guard command == .run, checkAbsolute == false, checkAbsolutePath == nil else {
+                throw ValidationError("--allocation-stacks and --export-allocation-stacks can only be used with the 'run' command.")
+            }
+        }
+        if allocationStacksToStdout {
+            quiet = true
+            noProgress = true
         }
     }
 
@@ -361,7 +395,9 @@ struct BenchmarkTool: AsyncParsableCommand {
             )
         )
 
-        try postProcessBenchmarkResults()
+        if allocationStacksToStdout == false {
+            try postProcessBenchmarkResults()
+        }
 
         if allocationStacks {
             try reportAllocationStacks()
@@ -422,7 +458,7 @@ struct BenchmarkTool: AsyncParsableCommand {
         default:
             machineOutputToStdout = self.path == "stdout"
         }
-        if machineOutputToStdout {
+        if machineOutputToStdout || allocationStacksToStdout {
             args.append("--suppress-metric-warnings")
         }
 

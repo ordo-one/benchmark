@@ -8,17 +8,23 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
+import ArgumentParser
 import Benchmark
 import Foundation
 
+enum AllocationStacksExportFormat: String, ExpressibleByArgument {
+    case folded
+    case json
+}
+
 extension BenchmarkTool {
     /// Prints the allocation stack traces recorded with `--allocation-stacks`, per benchmark, stacks
-    /// sorted by allocation count. With `--path` the full reports are written as JSON and non-empty
-    /// reports as folded stacks (only the JSON, to stdout, for `--path stdout`).
+    /// sorted by allocation count. `--export-allocation-stacks` exports the full reports in the chosen
+    /// format. With `--allocation-stacks-export-path stdout`, only the exported data is printed.
     func reportAllocationStacks() throws {
         let reports = allocationStackReports.sorted { ($0.key.target, $0.key.name) < ($1.key.target, $1.key.name) }
 
-        if path != "stdout" {
+        if allocationStacksToStdout == false {
             if quiet == false, format != .markdown {
                 "Allocation stacks".printAsHeader()
             }
@@ -34,24 +40,29 @@ extension BenchmarkTool {
             }
         }
 
-        if path != nil {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            for (identifier, report) in reports {
-                try write(
-                    exportData: String(decoding: try encoder.encode(report), as: UTF8.self),
-                    fileName: cleanupStringForShellSafety("\(identifier.target).\(identifier.name).allocations.json")
-                )
-                if path != "stdout" {
-                    let folded = report.foldedOutput()
-                    if folded.isEmpty == false {
-                        try write(
-                            exportData: folded,
-                            fileName: cleanupStringForShellSafety("\(identifier.target).\(identifier.name).allocations.folded")
-                        )
-                    }
+        guard exportAllocationStacks else {
+            return
+        }
+
+        let exportFormat = allocationStacksExportFormat ?? .folded
+        for (identifier, report) in reports {
+            let data: String
+            switch exportFormat {
+            case .folded:
+                data = report.foldedOutput()
+                guard data.isEmpty == false else {
+                    continue
                 }
+            case .json:
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                data = String(decoding: try encoder.encode(report), as: UTF8.self)
             }
+            try write(
+                exportData: data,
+                fileName: cleanupStringForShellSafety("\(identifier.target).\(identifier.name).allocations.\(exportFormat.rawValue)"),
+                exportPath: allocationStacksExportPath ?? "."
+            )
         }
     }
 }

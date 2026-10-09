@@ -185,11 +185,32 @@ struct Benchmark: AsyncParsableCommand {
             by allocation count (highest first). Recording slows allocations down, so only the malloc count and
             bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
             the Swift Runtime module (macOS 26+ or Linux).
-            With --path, exports JSON and a .allocations.folded file per non-empty benchmark.
-            With --path stdout, exports JSON only.
             """
     )
     var allocationStacks = false
+
+    @Flag(
+        name: .long,
+        help:
+            """
+            Record and export allocation stacks; implies --allocation-stacks.
+            Writes to --allocation-stacks-export-path (default: current directory).
+            """
+    )
+    var exportAllocationStacks = false
+
+    @Option(name: .long, help: "The allocation stack export format: folded or json (default: folded). Requires --export-allocation-stacks.")
+    var allocationStacksExportFormat: String?
+
+    @Option(
+        name: .long,
+        help:
+            """
+            The allocation stack export directory, default is the current directory (".").
+            Use stdout to print only the exported data. Requires --export-allocation-stacks.
+            """
+    )
+    var allocationStacksExportPath: String?
 
     @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace, default is 64")
     var allocationStackDepth: Int?
