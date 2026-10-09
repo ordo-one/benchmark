@@ -189,6 +189,29 @@ struct Benchmark: AsyncParsableCommand {
     )
     var allocationStacks = false
 
+    @Flag(
+        name: .long,
+        help:
+            """
+            Record and export allocation stacks; implies --allocation-stacks.
+            Writes to --allocation-stacks-export-path (default: current directory).
+            """
+    )
+    var exportAllocationStacks = false
+
+    @Option(name: .long, help: "The allocation stack export format: folded or json (default: folded). Requires --export-allocation-stacks.")
+    var allocationStacksExportFormat: String?
+
+    @Option(
+        name: .long,
+        help:
+            """
+            The allocation stack export directory, default is the current directory (".").
+            Use stdout to print only the exported data. Requires --export-allocation-stacks.
+            """
+    )
+    var allocationStacksExportPath: String?
+
     @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace, default is 64")
     var allocationStackDepth: Int?
 
