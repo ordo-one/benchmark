@@ -160,11 +160,67 @@ Using [jmh.morethan.io](https://jmh.morethan.io)
 <img width="1482" alt="image" src="https://user-images.githubusercontent.com/8501048/225313559-33014755-797f-4ddf-b536-24c1a618f271.png">
 
 ### Finding allocation sites
+
+An allocation stack is the chain of function calls captured when heap memory is allocated, showing which code path caused the allocation.
+
 To see *where* a benchmark allocates, run it with `--allocation-stacks`. The stack trace of every allocation in the measured region is recorded and the unique stacks are printed sorted by allocation count:
-```
+
+```sh
 swift package benchmark run --allocation-stacks --target MyBenchmarks --filter "Encode.*"
 ```
-Recording slows allocations down, so only the malloc count/bytes metrics are measured in this mode.
+
+
+### Sample output of benchmark runed with allocation stacks recording
+
+![Terminal output showing an allocation stack report](Sources/Benchmark/Documentation.docc/Resources/Images/AllocationStacksTerminal.png)
+
+Warmup iterations and code outside `startMeasurement()` / `stopMeasurement()` are excluded. By default, up to 64 frames are captured per stack and the 20 most frequent stacks are printed. Use `--allocation-stack-depth <depth>` to change the capture depth and `--allocation-stack-limit <limit>` to change the number printed (`0` prints all).
+
+Recording slows allocations down, so this diagnostic mode measures only `mallocCountTotal` and `mallocBytesCount` and is available with the `run` command. It requires the `MallocInterposer` trait (enabled by default) and a toolchain providing the Swift `Runtime` module. On macOS, it requires macOS 26 or later.
+
+#### Exporting folded stacks
+
+Use `--export-allocation-stacks` to capture, print, and export allocation stacks. It implies `--allocation-stacks` and defaults to the `folded` format, which can be opened in [speedscope](https://www.speedscope.app) or rendered with [FlameGraph](https://github.com/brendangregg/FlameGraph):
+
+```sh
+swift package --allow-writing-to-package-directory benchmark run \
+    --export-allocation-stacks --target MyBenchmarks --filter "Encode.*"
+```
+
+This writes a `<target>.<benchmark>.allocations.folded` file in the current directory for each benchmark that records allocations. Folded files contain every captured stack, regardless of `--allocation-stack-limit`, weighted by exact allocation counts across all measured iterations.
+
+Set `--allocation-stacks-export-path <directory>` to choose another destination. Grant the plugin write permission with `--allow-writing-to-package-directory` for output inside the package, or `--allow-writing-to-directory <directory>` for an external destination. T
+
+#### Visualization of the folded file with [Flamelens](https://github.com/YS-L/flamelens):
+
+```sh
+flamelens MyBenchmarks.Encode.allocations.folded
+```
+
+![Allocation flame graph displayed in Flamelens](Sources/Benchmark/Documentation.docc/Resources/Images/AllocationStacksFlamelens.png)
+
+#### Exporting JSON
+
+Select `--allocation-stacks-export-format json` to export a full report as `<target>.<benchmark>.allocations.json`, including allocation counts, byte totals, and frames:
+
+```sh
+swift package --allow-writing-to-package-directory benchmark run \
+    --export-allocation-stacks --allocation-stacks-export-format json \
+    --allocation-stacks-export-path allocation-stacks \
+    --target MyBenchmarks --filter "Encode.*"
+```
+
+JSON also includes every captured stack and writes reports for benchmarks with no allocations. Both `--allocation-stacks-export-format` and `--allocation-stacks-export-path` require `--export-allocation-stacks`; `--allocation-stacks` alone prints reports without creating files.
+
+To pipe the selected format to another tool, use `--allocation-stacks-export-path stdout`. This prints only the exported data. Select one benchmark when you need a single JSON report:
+
+```sh
+swift package benchmark run \
+    --export-allocation-stacks --allocation-stacks-export-format json \
+    --allocation-stacks-export-path stdout --target MyBenchmarks --filter "^Encode$"
+```
+
+See [Finding Allocation Sites](Sources/Benchmark/Documentation.docc/AllocationStacks.md) for report examples and more details.
 
 ## Swift 6 support
 The package supports Swift 6.0 benchmark targets as well as Swift 5.10 targets (for Swift 5.9 support, need to use version 1.28.0 exactly).

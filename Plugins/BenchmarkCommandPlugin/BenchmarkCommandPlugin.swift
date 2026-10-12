@@ -60,7 +60,7 @@ import PackagePlugin
         let skipTargets = try argumentExtractor.extractSpecifiedTargets(in: context.package, withOption: "skip-target")
         let outputFormats = argumentExtractor.extractOption(named: "format")
         let pathSpecified = argumentExtractor.extractOption(named: "path") // export path
-        let quietRunning = argumentExtractor.extractFlag(named: "quiet")
+        var quietRunning = argumentExtractor.extractFlag(named: "quiet")
         let noProgress = argumentExtractor.extractFlag(named: "no-progress")
         let checkAbsoluteThresholdsPath = argumentExtractor.extractOption(named: "check-absolute-path")
         let checkAbsoluteThresholds =
@@ -74,6 +74,9 @@ import PackagePlugin
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
         let allocationStacks = argumentExtractor.extractFlag(named: "allocation-stacks")
+        let exportAllocationStacks = argumentExtractor.extractFlag(named: "export-allocation-stacks")
+        let allocationStacksExportFormat = argumentExtractor.extractOption(named: "allocation-stacks-export-format")
+        let allocationStacksExportPath = argumentExtractor.extractOption(named: "allocation-stacks-export-path")
         let allocationStackDepth = argumentExtractor.extractOption(named: "allocation-stack-depth")
         let allocationStackLimit = argumentExtractor.extractOption(named: "allocation-stack-limit")
         var outputFormat: OutputFormat = .text
@@ -118,11 +121,11 @@ import PackagePlugin
         }
 
         var allocationStackArgs: [String] = []
-        if allocationStacks > 0 {
+        if allocationStacks > 0 || exportAllocationStacks > 0 {
             // Recording stacks slows every allocation down, so the results must not end up in
             // baselines or threshold checks.
             guard commandToPerform == .run, checkAbsoluteThresholds == 0 else {
-                print("--allocation-stacks can only be used with the 'run' command.")
+                print("--allocation-stacks and --export-allocation-stacks can only be used with the 'run' command.")
                 throw MyError.invalidArgument
             }
             allocationStackArgs.append("--allocation-stacks")
@@ -139,8 +142,37 @@ import PackagePlugin
                 allocationStackArgs.append(contentsOf: ["--\(option)", String(number)])
             }
         } else if allocationStackDepth.isEmpty == false || allocationStackLimit.isEmpty == false {
-            print("--allocation-stack-depth and --allocation-stack-limit require --allocation-stacks.")
+            print("--allocation-stack-depth and --allocation-stack-limit require --allocation-stacks or --export-allocation-stacks.")
             throw MyError.invalidArgument
+        }
+
+        if exportAllocationStacks > 0 {
+            allocationStackArgs.append("--export-allocation-stacks")
+        }
+        if allocationStacksExportFormat.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-format requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportFormat.count == 1,
+                let exportFormat = allocationStacksExportFormat.first,
+                ["folded", "json"].contains(exportFormat)
+            else {
+                print("Specify one --allocation-stacks-export-format: folded or json.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-format", exportFormat])
+        }
+        if allocationStacksExportPath.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-path requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportPath.count == 1, let stackExportPath = allocationStacksExportPath.first else {
+                print("Specify only one --allocation-stacks-export-path.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-path", stackExportPath])
         }
 
         if pathSpecified.count > 0 {
@@ -148,6 +180,10 @@ import PackagePlugin
             if pathSpecified.count > 1 {
                 print("Only a single path may be specified, will use the first one specified '\(exportPath)'")
             }
+        }
+
+        if exportAllocationStacks > 0, allocationStacksExportPath.first == "stdout" {
+            quietRunning = max(quietRunning, 1)
         }
 
         if outputFormats.count > 0 {

@@ -34,10 +34,49 @@ Only the measured region is recorded. Warmup iterations and anything before `sta
 ### Options
 
 - term `--allocation-stacks`: Record and print the allocation stacks.
+- term `--export-allocation-stacks`: Export the full allocation stack reports. Implies `--allocation-stacks`.
+- term `--allocation-stacks-export-format <folded|json>`: Choose the export format, default is `folded`. Requires `--export-allocation-stacks`.
+- term `--allocation-stacks-export-path <path>`: The export destination, default is the current directory. Requires `--export-allocation-stacks`. With `--export-allocation-stacks --allocation-stacks-export-path stdout`, only the exported data is printed.
 - term `--allocation-stack-depth <depth>`: The maximum number of frames captured per stack, default is 64. Deeper stacks are truncated at the innermost frames.
 - term `--allocation-stack-limit <limit>`: The maximum number of stacks printed per benchmark, `0` for all, default is 20.
 
-With `--format markdown` the stacks are printed as markdown. With `--path <path>` the full reports are also written as JSON, one `<target>.<benchmark>.allocations.json` file per benchmark (with `--path stdout`, only the JSON is printed).
+With `--format markdown` the stacks are printed as markdown. `--allocation-stacks` alone prints reports without exporting them. Export requires `--export-allocation-stacks` and writes only the selected format.
+
+### Folded stack export
+
+With `--export-allocation-stacks`, each benchmark that records allocations writes a `<target>.<benchmark>.allocations.folded` file for flamegraph.pl or speedscope. Use `--allocation-stacks-export-path` to choose the output directory. Grant the command plugin write permission for the destination (`--allow-writing-to-package-directory` for output inside the package, or `--allow-writing-to-directory <path>` for an external directory):
+
+```sh
+swift package --allow-writing-to-package-directory benchmark run \
+    --export-allocation-stacks --target MyBenchmarks --filter "Encode.*" --allocation-stacks-export-path allocation-stacks
+```
+
+The files contain all captured stacks, regardless of `--allocation-stack-limit`. Frames run from the outermost caller to the allocation site, separated by semicolons, with the allocation count at the end:
+
+```
+benchmark();encode() at Encoder.swift:33;swift_allocObject in libswiftCore.dylib 2000
+benchmark();flush() [async] at Encoder.swift:44;swift_slowAlloc in libswiftCore.dylib 1000
+```
+
+Weights are exact allocation totals across all measured iterations, matching the JSON report, independent of `--scale`. Keeping integer run totals preserves rare allocations and compatibility with speedscope. Identical rendered stacks are merged, and equal counts are ordered by their frame labels so output is deterministic. Semicolons inside frame labels become commas and embedded newlines become spaces.
+
+Open the file in [speedscope](https://www.speedscope.app), or render it with [FlameGraph](https://github.com/brendangregg/FlameGraph):
+
+```sh
+flamegraph.pl --countname allocations --title "Allocation stacks" allocation-stacks/MyBenchmarks.Encode.allocations.folded > allocations.svg
+```
+
+### JSON export
+
+Select `--allocation-stacks-export-format json` to write one `<target>.<benchmark>.allocations.json` file per benchmark, including benchmarks with no allocations:
+
+```sh
+swift package --allow-writing-to-package-directory benchmark run \
+    --export-allocation-stacks --allocation-stacks-export-format json \
+    --target MyBenchmarks --filter "Encode.*" --allocation-stacks-export-path allocation-stacks
+```
+
+Both formats export all captured stacks, regardless of `--allocation-stack-limit`. To pipe the selected format to another tool, use `--allocation-stacks-export-path stdout`; filter to one benchmark when a single report is needed.
 
 ### Overhead and metrics
 
@@ -50,9 +89,3 @@ Capturing a stack trace makes each allocation several microseconds slower and al
 
 - The `MallocInterposer` trait (enabled by default).
 - A toolchain providing the Swift `Runtime` module, and on Apple platforms macOS 26 or later.
-
-### Getting useful stacks
-
-- Stacks are walked using frame pointers, which Swift code keeps by default. C or C++ dependencies built without frame pointers can cut stacks short.
-- File and line information needs debug info; the default release build of benchmarks includes it. Frames without it show the image name instead.
-- Inlining merges frames: an allocation in an inlined function is attributed to its caller.

@@ -80,6 +80,14 @@ let help =
                             by allocation count (highest first). Recording slows allocations down, so only the malloc count and
                             bytes metrics are measured; only valid for the 'run' command. Requires a toolchain and OS providing
                             the Swift Runtime module (macOS 26+ or Linux).
+    --export-allocation-stacks
+                            Record and export allocation stacks; implies --allocation-stacks.
+                            Writes to --allocation-stacks-export-path (default: current directory).
+    --allocation-stacks-export-format <folded|json>
+                            The allocation stack export format, default is folded. Requires --export-allocation-stacks.
+    --allocation-stacks-export-path <path>
+                            The allocation stack export directory, default is the current directory (".").
+                            Use stdout to print only the exported data. Requires --export-allocation-stacks.
     --allocation-stack-depth <allocation-stack-depth>
                             The maximum number of frames captured per allocation stack trace, default is 64
     --allocation-stack-limit <allocation-stack-limit>

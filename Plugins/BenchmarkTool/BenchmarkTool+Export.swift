@@ -26,12 +26,13 @@ extension BenchmarkTool {
     func write(
         exportData: String,
         hostIdentifier: String? = nil,
-        fileName: String = "results.txt"
+        fileName: String = "results.txt",
+        exportPath: String? = nil
     ) throws {
         // Set up desired output path and create any intermediate directories for structure as required:
         var outputPath: FilePath
 
-        if let path = (thresholdsOperation == nil) ? path : thresholdsPath {
+        if let path = exportPath ?? (thresholdsOperation == nil ? self.path : thresholdsPath) {
             if path == "stdout" {
                 print(exportData)
                 return
