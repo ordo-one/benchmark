@@ -51,12 +51,7 @@ final class BenchmarkTests: XCTestCase {
             MainActor.assertIsolated()
         }
         XCTAssertNotNil(benchmark)
-        let isolation: (any Actor)?
-        if let asyncClosure = benchmark?.asyncClosure {
-            isolation = asyncClosure.isolation
-        } else {
-            isolation = nil
-        }
+        let isolation = benchmark?.closureIsolation
         XCTAssertIdentical(isolation, MainActor.shared)
         await benchmark?.run(isolation: isolation)
     }
@@ -152,6 +147,34 @@ final class BenchmarkTests: XCTestCase {
         XCTAssertGreaterThan(counter.count, 0)
     }
 
+    func testExecutorRunsMainActorSetupResultBenchmarkOnMainActor() async throws {
+        // The generic `SetupResult` initializers wrap the user's closure; the wrapper must not erase the
+        // isolation the closure declared, otherwise a `@MainActor` benchmark would silently run unisolated.
+        Benchmark.testSkipBenchmarkRegistrations = true
+        defer { Benchmark.testSkipBenchmarkRegistrations = false }
+
+        final class Counter: @unchecked Sendable { var count = 0 }
+        let counter = Counter()
+
+        let benchmark = Benchmark(
+            "MainActor setup-result benchmark",
+            configuration: .init(metrics: [.wallClock], warmupIterations: 1, maxDuration: .seconds(10), maxIterations: 3)
+        ) { @MainActor _, setupResult in
+            await Task.yield()
+            MainActor.assertIsolated()
+            counter.count += setupResult
+        } setup: {
+            7
+        }
+        XCTAssertNotNil(benchmark)
+        XCTAssertIdentical(benchmark?.closureIsolation, MainActor.shared)
+
+        try await benchmark!.setup?()
+        let results = await BenchmarkExecutor().run(benchmark!, isolation: benchmark!.closureIsolation)
+        XCTAssertFalse(results.isEmpty)
+        XCTAssertGreaterThanOrEqual(counter.count, 7)
+    }
+
     func testUnisolatedAsyncBenchmarkHoppingToMainActor() async throws {
         // A *nominally unisolated* async benchmark that hops to the main actor itself (via MainActor.run)
         // must complete without deadlocking.  This is one of the scenarios the old DispatchSemaphore
@@ -175,12 +198,7 @@ final class BenchmarkTests: XCTestCase {
         XCTAssertNotNil(benchmark)
 
         // An unisolated async closure carries no isolation.
-        let isolation: (any Actor)?
-        if let asyncClosure = benchmark?.asyncClosure {
-            isolation = asyncClosure.isolation
-        } else {
-            isolation = nil
-        }
+        let isolation = benchmark?.closureIsolation
         XCTAssertNil(isolation)
 
         let results = await BenchmarkExecutor().run(benchmark!, isolation: isolation)

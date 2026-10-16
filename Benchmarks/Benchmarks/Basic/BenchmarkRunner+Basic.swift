@@ -66,6 +66,17 @@ let benchmarks: @Sendable () -> Void = {
     Benchmark("Noop2", configuration: .init(metrics: [.wallClock, .instructions] + .arc)) { _ in
     }
 
+    // Issue #358: an async closure that declares an actor runs its whole measurement loop on that actor.
+    Benchmark(
+        "MainActor isolated async",
+        configuration: .init(metrics: [.wallClock, .mallocCountTotal])
+    ) { @MainActor benchmark async in
+        MainActor.assertIsolated()
+        for _ in benchmark.scaledIterations {
+            blackHole(Date())
+        }
+    }
+
     Benchmark(
         "ARCBox",
         configuration: .init(

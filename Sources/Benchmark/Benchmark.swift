@@ -26,6 +26,8 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     public typealias BenchmarkMeasurementSynchronization = (_ explicitStartStop: Bool) -> Void
     @_documentation(visibility: internal)
     public typealias BenchmarkCustomMetricMeasurement = (BenchmarkMetric, Int) -> Void
+    /// Internal storage type for async benchmark bodies: runs on whatever isolation `run(isolation:)` is on.
+    typealias BenchmarkAsyncBody = nonisolated(nonsending) (_ benchmark: Benchmark) async throws -> Void
 
     /// Alias for closures used to hook into setup / teardown
     public typealias BenchmarkSetupHook = () async throws -> Void
@@ -160,10 +162,13 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     /// closure: The actual benchmark closure that will be measured
     var closure: BenchmarkClosure? // The actual benchmark to run
     /// asyncClosure: The actual benchmark (async) closure that will be measured.
-    /// Stored as the throwing variant so both throwing and non-throwing async closures can be held
-    /// while preserving the closure's actor isolation (captured via `@isolated(any)`), which lets the
-    /// executor run the measurement loop *on* that isolation hop-free (e.g. `@MainActor` benchmarks).
-    var asyncClosure: BenchmarkAsyncThrowingClosure? // The actual benchmark to run
+    /// Stored as a `nonisolated(nonsending)` body, so it runs on whatever isolation `run(isolation:)` is
+    /// called on. `closureIsolation` records the isolation the user's `@isolated(any)` closure declared
+    /// (e.g. `@MainActor`); the runner drives the whole measurement loop there, so the user's closure
+    /// executes on its own isolation without a per-iteration hop.
+    var asyncClosure: BenchmarkAsyncBody? // The actual benchmark to run
+    /// The actor isolation the async benchmark closure declared, or nil when it is unisolated (or synchronous).
+    var closureIsolation: (any Actor)?
     // setup/teardown hooks for the instance
     var setup: BenchmarkSetupHook?
     var teardown: BenchmarkTeardownHook?
@@ -278,24 +283,21 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     ///   - setup: A closure that will be run once before the benchmark iterations are run
     ///   - teardown: A closure that will be run once after the benchmark iterations are done
     @discardableResult
-    public init?(
+    public convenience init?(
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping BenchmarkAsyncClosure,
         setup: BenchmarkSetupHook? = nil,
         teardown: BenchmarkTeardownHook? = nil
     ) {
-        if configuration.skip {
-            return nil
-        }
-        target = ""
-        self.baseName = name
-        self.configuration = configuration
-        asyncClosure = closure
-        self.setup = setup
-        self.teardown = teardown
-
-        benchmarkRegistration()
+        self.init(
+            name,
+            configuration: configuration,
+            closureIsolation: closure.isolation,
+            asyncBody: { benchmark in await closure(benchmark) },
+            setup: setup,
+            teardown: teardown
+        )
     }
 
     /// Definition of a throwing Benchmark
@@ -338,12 +340,35 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     ///   - setup: A closure that will be run once before the benchmark iterations are run
     ///   - teardown: A closure that will be run once after the benchmark iterations are done
     @discardableResult
-    public init?(
+    public convenience init?(
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping BenchmarkAsyncThrowingClosure,
         setup: BenchmarkSetupHook? = nil,
         teardown: BenchmarkTeardownHook? = nil
+    ) {
+        self.init(
+            name,
+            configuration: configuration,
+            closureIsolation: closure.isolation,
+            asyncBody: { benchmark in try await closure(benchmark) },
+            setup: setup,
+            teardown: teardown
+        )
+    }
+
+    /// Designated initializer for async benchmarks. `asyncBody` is a `nonisolated(nonsending)` wrapper
+    /// around the user's closure and `closureIsolation` is the isolation that closure declared; keeping
+    /// the two apart lets the convenience initializers (including the generic `SetupResult` ones) add
+    /// their own wrapping without erasing the isolation the measurement loop should run on. Any error
+    /// thrown by the body is caught and reported in `run()`.
+    init?(
+        _ name: String,
+        configuration: Benchmark.Configuration,
+        closureIsolation: (any Actor)?,
+        asyncBody: @escaping BenchmarkAsyncBody,
+        setup: BenchmarkSetupHook?,
+        teardown: BenchmarkTeardownHook?
     ) {
         if configuration.skip {
             return nil
@@ -351,9 +376,8 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
         target = ""
         self.baseName = name
         self.configuration = configuration
-        // Stored directly (rather than wrapped in an error-handling closure) so the closure's actor
-        // isolation is preserved; any thrown error is caught in `run()`.
-        asyncClosure = closure
+        self.closureIsolation = closureIsolation
+        asyncClosure = asyncBody
         self.setup = setup
         self.teardown = teardown
 

@@ -41,16 +41,22 @@ public extension Benchmark {
     convenience init?<SetupResult>(
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
-        closure: @escaping (_ benchmark: Benchmark, SetupResult) async -> Void,
+        closure: @escaping @isolated(any) (_ benchmark: Benchmark, SetupResult) async -> Void,
         setup: @escaping (() async throws -> SetupResult),
         teardown: BenchmarkTeardownHook? = nil
     ) {
-        self.init(name, configuration: configuration) { benchmark in
-            let setupResult = benchmark.setupState! as! SetupResult // swiftlint:disable:this force_cast
-            await closure(benchmark, setupResult)
-        } teardown: {
-            try await teardown?()
-        }
+        self.init(
+            name,
+            configuration: configuration,
+            closureIsolation: closure.isolation,
+            asyncBody: { benchmark in
+                // Read on the loop's isolation, which is the closure's own, so handing it over is safe.
+                nonisolated(unsafe) let setupResult = benchmark.setupState! as! SetupResult // swiftlint:disable:this force_cast
+                await closure(benchmark, setupResult)
+            },
+            setup: nil,
+            teardown: { try await teardown?() }
+        )
 
         self.setup = {
             self.setupState = try await setup()
@@ -106,21 +112,21 @@ public extension Benchmark {
     convenience init?<SetupResult>(
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
-        closure: @escaping (_ benchmark: Benchmark, SetupResult) async throws -> Void,
+        closure: @escaping @isolated(any) (_ benchmark: Benchmark, SetupResult) async throws -> Void,
         setup: @escaping (() async throws -> SetupResult),
         teardown: BenchmarkTeardownHook? = nil
     ) {
         self.init(
             name,
             configuration: configuration,
-            closure: { benchmark in
-                do {
-                    let setupResult = benchmark.setupState! as! SetupResult // swiftlint:disable:this force_cast
-                    try await closure(benchmark, setupResult)
-                } catch {
-                    benchmark.error("Benchmark \(name) failed with \(String(reflecting: error))")
-                }
+            closureIsolation: closure.isolation,
+            asyncBody: { benchmark in
+                // Read on the loop's isolation, which is the closure's own, so handing it over is safe.
+                // Thrown errors are reported by `run()`.
+                nonisolated(unsafe) let setupResult = benchmark.setupState! as! SetupResult // swiftlint:disable:this force_cast
+                try await closure(benchmark, setupResult)
             },
+            setup: nil,
             teardown: teardown
         )
 
