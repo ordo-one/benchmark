@@ -1,0 +1,56 @@
+name: Swift macOS build supported versions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, next ]
+
+# Builds and tests on the older Swift minors inside the support window (the three most
+# recent minor releases). The newest minor is covered by the regular macOS build workflow.
+jobs:
+  build-macos-supported:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.2", "6.3"]
+
+    runs-on: macos-15
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install Swift ${{ matrix.swift }} with swiftly
+      run: |
+        curl -fsSL -O https://download.swift.org/swiftly/darwin/swiftly.pkg
+        installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
+        ~/.swiftly/bin/swiftly init --quiet-shell-followup --assume-yes --skip-install
+        . ~/.swiftly/env.sh
+        swiftly install --use ${{ matrix.swift }}
+        echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+
+    - name: Homebrew Mac
+      run: |
+        echo "/opt/homebrew/bin:/usr/local/bin" >> $GITHUB_PATH
+        echo BENCHMARK_DISABLE_JEMALLOC=true >> $GITHUB_ENV
+        brew install jemalloc
+
+    - name: Swift version
+      run: swift --version
+
+    - name: Build
+      run: swift build
+
+    - name: Run tests
+      run: |
+        if [ -d Tests ]; then
+          swift test --parallel
+        fi
+
+    - name: Run tests (release)
+      run: |
+        if [ -d Tests ]; then
+          swift test -c release --parallel
+        fi

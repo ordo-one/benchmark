@@ -51,31 +51,6 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     @ThreadSafeProperty(wrappedValue: nil, lock: setupTeardownLock)
     public static var _teardown: BenchmarkTeardownHook?
 
-    #if swift(<5.10)
-    @_documentation(visibility: internal)
-    public static var startupHook: BenchmarkSetupHook? {
-        get { _startupHook }
-        set { _startupHook = newValue }
-    }
-
-    @_documentation(visibility: internal)
-    public static var shutdownHook: BenchmarkTeardownHook? {
-        get { _shutdownHook }
-        set { _shutdownHook = newValue }
-    }
-
-    /// This closure if set, will be run before a targets benchmarks are run, but after they are registered
-    public static var setup: BenchmarkSetupHook? {
-        get { _setup }
-        set { _setup = newValue }
-    }
-
-    /// This closure if set, will be run after a targets benchmarks run, but after they are registered
-    public static var teardown: BenchmarkTeardownHook? {
-        get { _teardown }
-        set { _teardown = newValue }
-    }
-    #elseif swift(>=5.10)
     @_documentation(visibility: internal)
     nonisolated(unsafe) public static var startupHook: BenchmarkSetupHook? {
         get { _startupHook }
@@ -99,7 +74,6 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
         get { _teardown }
         set { _teardown = newValue }
     }
-    #endif
 
     /// Set to true if this benchmark results should be compared with an absolute threshold when `--check-absolute` is
     /// specified on the command line. An implementation can then choose to configure thresholds differently for
@@ -210,19 +184,12 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     )
     private static var _defaultConfiguration: Configuration
 
-    #if swift(<5.10)
-    public static var defaultConfiguration: Configuration {
-        get { _defaultConfiguration }
-        set { _defaultConfiguration = newValue }
-    }
-    #elseif swift(>=5.10)
     nonisolated(unsafe)
         public static var defaultConfiguration: Configuration
     {
         get { _defaultConfiguration }
         set { _defaultConfiguration = newValue }
     }
-    #endif
 
     static var testSkipBenchmarkRegistrations = false // true in test to avoid bench registration fail
     var measurementCompleted = false // Keep track so we skip multiple 'end of measurement'

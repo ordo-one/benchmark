@@ -271,11 +271,7 @@ import PackagePlugin
             print("")
         }
 
-        #if swift(>=6.0)
         let packageDirectory = context.package.directoryURL.path(percentEncoded: false)
-        #else
-        let packageDirectory = context.package.directory.string
-        #endif
 
         var args: [String] = [
             benchmarkToolName,
@@ -520,26 +516,16 @@ import PackagePlugin
         }
 
         let tool = buildResult.builtArtifacts.first(where: {
-            #if swift(>=6.0)
             return $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
-            #else
-            return $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
-            #endif
         })
 
         guard let tool else {
             throw MyError.buildFailed
         }
 
-        #if swift(>=6.0)
         let toolDirectory = tool.url.deletingLastPathComponent()
         benchmarkTool = tool.url.path(percentEncoded: false)
         interposerLib = toolDirectory.appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
-        #else
-        let toolDirectory = tool.path.removingLastComponent()
-        benchmarkTool = tool.path.string
-        interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
-        #endif
         #if os(Linux) && compiler(>=6.3) && compiler(<6.4)
         let swiftRuntimeInterposerLib = toolDirectory
             .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
@@ -549,11 +535,7 @@ import PackagePlugin
             swiftSourceModuleTargets
             .filter { $0.kind == .executable }
             .filter { benchmark in
-                #if swift(>=6.0)
                 return benchmark.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
-                #else
-                return benchmark.directory.removingLastComponent().lastComponent == "Benchmarks"
-                #endif
             }
             .filter { benchmark in
                 swiftSourceModuleTargets.first(where: { $0.name == benchmark.name }) != nil ? true : false
@@ -602,11 +584,7 @@ import PackagePlugin
                 // Filter out all executable products which are Benchmarks we should run
                 let benchmarks = buildResult.builtArtifacts
                     .filter { benchmark in
-                        #if swift(>=6.0)
                         filteredTargets.first(where: { $0.name == benchmark.url.lastPathComponent }) != nil ? true : false
-                        #else
-                        filteredTargets.first(where: { $0.name == benchmark.path.lastComponent }) != nil ? true : false
-                        #endif
                     }
 
                 if benchmarks.isEmpty {
@@ -614,11 +592,7 @@ import PackagePlugin
                 }
 
                 benchmarks.forEach { benchmark in
-                    #if swift(>=6.0)
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.url.path(percentEncoded: false)])
-                    #else
-                    args.append(contentsOf: ["--benchmark-executable-paths", benchmark.path.string])
-                    #endif
                 }
             }
         }
