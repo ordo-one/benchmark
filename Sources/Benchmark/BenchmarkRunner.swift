@@ -310,7 +310,10 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite { 
                             try suppressor.suppressOutput()
                         }
 
-                        results = benchmarkExecutor.run(benchmark)
+                        // Run the measurement loop on the isolation the benchmark's async closure declared
+                        // (e.g. `@MainActor`); unisolated and synchronous benchmarks yield `nil` and run on the
+                        // generic executor.
+                        results = await benchmarkExecutor.run(benchmark, isolation: benchmark.closureIsolation)
 
                         if quiet {
                             try suppressor.restoreOutput()

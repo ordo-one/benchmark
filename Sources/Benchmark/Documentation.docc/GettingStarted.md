@@ -22,11 +22,11 @@ On Linux with Swift 6.3, Benchmark also uses a Swift runtime interposer for ARC 
 
 On Swift 6.2 and 5.x toolchains the backend is instead the [jemalloc](https://jemalloc.net) memory allocation library, controlled via a trait named `Jemalloc` (also enabled by default).
 
-On Swift 6.2 and 5.x toolchains the Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics (see below). On Swift 6.3+ no installation is needed.
+On Swift 6.2 toolchains the Benchmark package requires you to install jemalloc on any machine used for benchmarking if you want malloc statistics (see below). On Swift 6.3+ no installation is needed.
 
-#### Disabling the malloc backend (Swift 6.1+)
+#### Disabling the malloc backend
 
-For platforms where the malloc backend isn't available or wanted (e.g. musl/static SDK builds, sanitizer builds, or Xcode profiling), disable the relevant default trait by passing `--disable-default-traits` to the Swift build, test, or package command. This drops the `MallocInterposer` trait on Swift 6.3+ and the `Jemalloc` trait on Swift 6.1/6.2:
+For platforms where the malloc backend isn't available or wanted (e.g. musl/static SDK builds, sanitizer builds, or Xcode profiling), disable the relevant default trait by passing `--disable-default-traits` to the Swift build, test, or package command. This drops the `MallocInterposer` trait on Swift 6.3+ and the `Jemalloc` trait on Swift 6.2:
 
 ```bash
 swift build --disable-default-traits
@@ -42,9 +42,9 @@ If you depend on `benchmark` in your own package and want to disable the malloc 
 
 On Swift 6.3+ you can equivalently set the `BENCHMARK_DISABLE_MALLOC_INTERPOSER` environment variable (the older `BENCHMARK_DISABLE_JEMALLOC` is still honored as an alias).
 
-#### Disabling jemalloc (Swift 6.2 and 5.x)
+#### Disabling jemalloc (Swift 6.2)
 
-When using Swift 6.2 or 5.x toolchains (which use the `Package@swift-6.2.swift` / `Package@swift-5.9.swift` manifests), jemalloc can be disabled via the `BENCHMARK_DISABLE_JEMALLOC` environment variable:
+When using a Swift 6.2 toolchain (which uses the `Package@swift-6.2.swift` manifest), jemalloc can be disabled via the `BENCHMARK_DISABLE_JEMALLOC` environment variable:
 
 ```bash
 BENCHMARK_DISABLE_JEMALLOC=true swift package benchmark
