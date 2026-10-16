@@ -31,7 +31,13 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
     let operatingSystemStatsProducer = OperatingSystemStatsProducer()
 
     // swiftlint:disable cyclomatic_complexity function_body_length
-    func run(_ benchmark: Benchmark) -> [BenchmarkResult] {
+    //
+    // The measurement loop runs isolated to the benchmark's desired actor (passed in by the
+    // caller from the closure's own `@isolated(any)` isolation).  For a `@MainActor` benchmark this
+    // means the entire loop — and each `await benchmark.run()` below — executes on the main actor
+    // with no per-iteration actor hop; for an unisolated benchmark `isolation` is `nil` and the loop
+    // runs on the generic executor.
+    func run(_ benchmark: Benchmark, isolation: isolated (any Actor)? = #isolation) async -> [BenchmarkResult] {
         var wallClockDuration: Duration = .zero
         #if canImport(MallocInterposerSwift)
         var startMallocStats = MallocInterposerSwift.Statistics()
@@ -74,7 +80,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
         for iterations in 0..<benchmark.configuration.warmupIterations {
             benchmark.currentIteration = iterations
-            benchmark.run()
+            await benchmark.run()
         }
 
         #if canImport(OSLog)
@@ -493,7 +499,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
             benchmark.currentIteration = iterations + benchmark.configuration.warmupIterations
 
-            benchmark.run()
+            await benchmark.run()
 
             iterations += 1
 
