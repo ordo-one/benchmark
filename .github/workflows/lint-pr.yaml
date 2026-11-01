@@ -7,8 +7,14 @@ on:
       - edited
       - synchronize
 
+permissions:
+  contents: read
+
 jobs:
   main:
+    permissions:
+      pull-requests: read
+      statuses: write
     name: Validate PR title
     runs-on: ubuntu-latest
     timeout-minutes: 30

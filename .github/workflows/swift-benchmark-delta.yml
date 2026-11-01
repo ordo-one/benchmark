@@ -5,8 +5,14 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   benchmark-delta:
+    permissions:
+      contents: read
+      pull-requests: write
     timeout-minutes: 30
     runs-on: ${{ matrix.os }}
 
@@ -106,7 +112,7 @@ jobs:
           file-path: benchmark_comment
           comment-tag: 'Pull request benchmark comparison [${{ matrix.os }}] with'
       - name: Exit with correct status
-        if: ${{ success() || failure() }}
+        if: ${{ env.hasBenchmark == '1' && (success() || failure()) }}
         run: |
           # Treat improvement (4) and same-as-baseline (0) as success
           if [ "${{ env.exitStatus }}" = "0" ] || [ "${{ env.exitStatus }}" = "4" ]; then

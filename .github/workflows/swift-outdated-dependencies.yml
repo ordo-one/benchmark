@@ -5,8 +5,14 @@ on:
   schedule:
     - cron: '0 8 */100,1-7 * MON' # First Monday of the month
 
+permissions:
+  contents: read
+
 jobs:
   spm-dep-check:
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: [ubuntu-latest]
     timeout-minutes: 60
     steps:
