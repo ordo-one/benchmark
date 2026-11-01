@@ -31,8 +31,6 @@ jobs:
         uses: ./.github/actions/consul-start
       - name: Git URL token override and misc
         run: |
-          #git config --global url."https://ordo-ci:${{ secrets.CI_MACHINE_PAT }}@github.com".insteadOf "https://github.com"
-          #/usr/bin/ordo-performance
           [ -d Benchmarks ] && echo "hasBenchmark=1" >> $GITHUB_ENV
           [ -f Benchmarks/Package.swift  ] && echo "BENCHMARK_PACKAGE_PATH=--package-path Benchmarks" >> $GITHUB_ENV
           echo "BENCHMARK_RUN_URL=https://github.com/ordo-one/${{ github.event.repository.name }}/actions/runs/${{ github.run_id }}" >> $GITHUB_ENV
@@ -112,7 +110,6 @@ jobs:
       - name: Exit with correct status
         if: ${{ success() || failure() }}
         run: |
-          #/usr/bin/ordo-performance powersave
           # Treat improvement (4) and same-as-baseline (0) as success
           if [ "${{ env.exitStatus }}" = "0" ] || [ "${{ env.exitStatus }}" = "4" ]; then
             exit 0

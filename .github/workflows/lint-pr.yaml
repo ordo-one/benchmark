@@ -10,7 +10,6 @@ on:
 jobs:
   main:
     name: Validate PR title
-#    runs-on: [self-hosted, ubuntu-latest]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
