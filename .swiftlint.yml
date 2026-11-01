@@ -92,4 +92,6 @@ line_length:
   ignores_function_declarations: true
   ignores_interpolated_strings: true
 identifier_name:
-  excluded: [id, i, j, k]
+  excluded: [id, up, in, at, of, to, a, b, c, d, i, j, k, x, y, dx, dy, u, v]
+  max_length: 60
+  allowed_symbols: [_]
