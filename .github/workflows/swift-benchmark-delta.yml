@@ -27,8 +27,6 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get install -y libjemalloc-dev
-      - name: Start consul
-        uses: ./.github/actions/consul-start
       - name: Git URL token override and misc
         run: |
           [ -d Benchmarks ] && echo "hasBenchmark=1" >> $GITHUB_ENV

@@ -31,9 +31,6 @@ jobs:
 
     - uses: actions/checkout@v6
 
-    - name: Start consul
-      uses: ./.github/actions/consul-start
-
     - name: Swift version
       run: swift --version
 

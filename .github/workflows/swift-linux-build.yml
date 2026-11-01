@@ -26,9 +26,6 @@ jobs:
 
     - uses: actions/checkout@v6
 
-    - name: Start consul
-      uses: ./.github/actions/consul-start
-
     - name: Ubuntu deps
       if: ${{ runner.os == 'Linux' }}
       run: |
