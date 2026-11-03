@@ -32,18 +32,20 @@ jobs:
 
     - name: Export code coverage
       run: |
-         xctest_binary=".build/debug/${{ github.event.repository.name }}PackageTests.xctest"
-         if [ ! -f ${xctest_binary} ]; then
-             xctest_binary=$(find .build/debug/ -type f -name "*.xctest" | tail -1)
-             echo "Will llvm-cov '${xctest_binary}'"
-         fi
-
-         if [ -f ${xctest_binary} ]; then
-             llvm-cov export -format="lcov" ${xctest_binary} -instr-profile .build/debug/codecov/default.profdata > info.lcov
-         fi
+        [ -d Tests ] || exit 0
+        # Paths from SwiftPM: native builds one <Package>PackageTests.xctest, swiftbuild one <Target>.so per test target.
+        bin=$(swift build --show-bin-path)
+        profdata="$(dirname "$(swift test --show-codecov-path)")/default.profdata"
+        objects=""
+        for f in $(find -L "$bin" -maxdepth 1 -type f \( -name '*PackageTests.xctest' -o -name '*.so' \)); do
+          objects="$objects ${objects:+-object }$f"
+        done
+        [ -n "$objects" ] || { echo "no test binaries in $bin"; exit 1; }
+        echo "llvm-cov export$objects"
+        llvm-cov export -format=lcov $objects -instr-profile "$profdata" > info.lcov
 
     - name: Upload codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       with:
         token: ${{ secrets.CODECOV_REPO_TOKEN }}
         files: info.lcov
