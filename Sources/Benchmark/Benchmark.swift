@@ -475,6 +475,18 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
             runAsync()
         }
     }
+
+    // Used by the BenchmarkRunner, from an async context: awaits an async closure in place, where
+    // `runAsync()` blocks the calling thread, here a cooperative one, and so deadlocks when the
+    // closure needs another thread of the pool (another task, an actor).
+    func runAwaitingClosure() async {
+        guard closure == nil, let asyncClosure else {
+            return run()
+        }
+        _startMeasurement(false)
+        await asyncClosure(self)
+        _stopMeasurement(false)
+    }
 }
 
 public extension Benchmark {
