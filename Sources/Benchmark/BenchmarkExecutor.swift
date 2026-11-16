@@ -31,7 +31,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
     let operatingSystemStatsProducer = OperatingSystemStatsProducer()
 
     // swiftlint:disable cyclomatic_complexity function_body_length
-    func run(_ benchmark: Benchmark) -> [BenchmarkResult] {
+    func run(_ benchmark: Benchmark) async -> [BenchmarkResult] {
         var wallClockDuration: Duration = .zero
         #if canImport(MallocInterposerSwift)
         var startMallocStats = MallocInterposerSwift.Statistics()
@@ -74,7 +74,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
         for iterations in 0..<benchmark.configuration.warmupIterations {
             benchmark.currentIteration = iterations
-            benchmark.run()
+            await benchmark.runAwaitingClosure()
         }
 
         #if canImport(OSLog)
@@ -493,7 +493,7 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
 
             benchmark.currentIteration = iterations + benchmark.configuration.warmupIterations
 
-            benchmark.run()
+            await benchmark.runAwaitingClosure()
 
             iterations += 1
 

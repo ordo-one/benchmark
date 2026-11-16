@@ -9,8 +9,6 @@
 // An implementation of a clock suitable for benchmarking using clock_gettime_nsec_np() on macOS
 // which is ~2-3 x less overhead.
 
-// swiftlint:disable identifier_name
-
 // Largely adopted by Swift's ContinuousClock
 // https://github.com/apple/swift/blob/48987de3d3ab228eed4867949795c188759df234/stdlib/public/Concurrency/ContinuousClock.swift#L49
 
@@ -205,4 +203,3 @@ public extension Duration {
         (components.seconds * 1_000_000_000) + (components.attoseconds / 1_000_000_000)
     }
 }
-// swiftlint:enable identifier_name

@@ -29,6 +29,30 @@ final class BenchmarkTests: XCTestCase {
         benchmark?.runAsync()
     }
 
+    // The executor must not block the context it runs in while an async benchmark runs. Here the
+    // benchmark is run from an actor, and its body awaits that same actor: blocking the actor until
+    // the body completes deadlocks, as blocking the last free thread of the cooperative pool does
+    // when the body awaits another task or actor.
+    func testAsyncBenchmarkAwaitingTheCallingActor() throws {
+        let host = BenchmarkHost()
+        let benchmark = try XCTUnwrap(
+            Benchmark(
+                "testAsyncBenchmarkAwaitingTheCallingActor benchmark",
+                configuration: .init(metrics: [.wallClock], warmupIterations: 1, maxIterations: 10)
+            ) { _ in
+                await host.touch()
+            }
+        )
+        let finished = expectation(description: "benchmark finished")
+        Task.detached {
+            let results = await host.run(benchmark)
+            XCTAssertFalse(results.isEmpty)
+            finished.fulfill()
+        }
+        // Fail on a deadlock instead of hanging the test run
+        wait(for: [finished], timeout: 30)
+    }
+
     func testBenchmarkRunCustomMetric() throws {
         let benchmark = Benchmark(
             "testBenchmarkRunCustomMetric benchmark",
@@ -95,4 +119,13 @@ final class BenchmarkTests: XCTestCase {
         XCTAssertNotNil(benchmark)
         XCTAssertEqual(benchmark?.name, "testBenchmarkParameterizedDescription benchmark (bin: 42, foo: bar, pi: 3.14)")
     }
+}
+
+// Runs a benchmark from its own isolation, so a body awaiting it needs it to be free.
+private actor BenchmarkHost {
+    func run(_ benchmark: Benchmark) async -> [BenchmarkResult] {
+        await BenchmarkExecutor(quiet: true).run(benchmark)
+    }
+
+    func touch() {}
 }
