@@ -41,7 +41,7 @@ extension BenchmarkTool {
             columns.reserveCapacity(4)
 
             columns.append(
-                Column(title: "Metric", value: entry.description, width: maxDescriptionWidth, align: .left),
+                Column(title: "Metric", value: entry.description, width: maxDescriptionWidth, align: .left)
             )
 
             switch entry.value {

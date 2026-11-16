@@ -7,12 +7,15 @@ on:
   pull_request:
     branches: [ main, next ]
 
+permissions:
+  contents: read
+
 jobs:
   address-sanitizer:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26]
+        os: [xcode-27]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -30,9 +33,6 @@ jobs:
         sudo apt-get install -y libjemalloc-dev
 
     - uses: actions/checkout@v6
-
-    - name: Start consul
-      uses: ./.github/actions/consul-start
 
     - name: Swift version
       run: swift --version

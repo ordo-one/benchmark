@@ -19,11 +19,15 @@ import OSLog
 // swiftlint:disable file_length
 
 struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
-    init(quiet: Bool = false) {
+    init(quiet: Bool = false, allocationStackDepth: Int? = nil) {
         self.quiet = quiet
+        self.allocationStackDepth = allocationStackDepth
     }
 
     var quiet: Bool
+    /// When set, the stack trace (up to this many frames) of every allocation in the measured
+    /// region is recorded and attached to the benchmark as an `AllocationStackReport`.
+    var allocationStackDepth: Int?
     let operatingSystemStatsProducer = OperatingSystemStatsProducer()
 
     // swiftlint:disable cyclomatic_complexity function_body_length
@@ -44,6 +48,15 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         var stopARCStats = ARCStats()
         var startTime = BenchmarkClock.now
         var stopTime = BenchmarkClock.now
+        #if canImport(MallocInterposerSwift) && canImport(Runtime)
+        let allocationStacksRequested = allocationStackDepth != nil
+        // Allocations made by the stack-recording hook itself, subtracted from the malloc metrics.
+        var startNestedAllocations = (count: 0, bytes: 0)
+        var stopNestedAllocations = (count: 0, bytes: 0)
+        // Set once the benchmark calls startMeasurement() itself; from then on the implicit
+        // start no longer begins recording.
+        var usesExplicitStart = false
+        #endif
 
         // optionally run a few warmup iterations by default to clean out outliers due to cacheing etc.
 
@@ -110,6 +123,14 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             }
         }
 
+        #if canImport(MallocInterposerSwift) && canImport(Runtime)
+        if let allocationStackDepth, #available(macOS 26, *) {
+            // The interposer only calls the allocation hook while malloc counting is hooked.
+            mallocStatsRequested = true
+            AllocationStackRecorder.configure(maxDepth: allocationStackDepth)
+        }
+        #endif
+
         operatingSystemStatsProducer.configureMetrics(operatingSystemMetricsRequested)
 
         var iterations = 0
@@ -149,6 +170,17 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
         // NB that the order is important, as we will get leaked
         // ARC measurements if initializing it before malloc etc.
         benchmark.measurementPreSynchronization = { explicitStartStop in
+            #if canImport(MallocInterposerSwift) && canImport(Runtime)
+            if allocationStacksRequested, #available(macOS 26, *) {
+                AllocationStackRecorder.disable()
+                if explicitStartStop, usesExplicitStart == false {
+                    // Drop what the first iteration recorded before its explicit startMeasurement().
+                    usesExplicitStart = true
+                    AllocationStackRecorder.reset()
+                }
+            }
+            #endif
+
             #if canImport(OSLog)
             if explicitStartStop {
                 explicitStartStopInterval = signPost.beginInterval(
@@ -181,11 +213,26 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             }
 
             startTime = BenchmarkClock.now // must be as close to last in closure as possible
+
+            #if canImport(MallocInterposerSwift) && canImport(Runtime)
+            // Recording is far slower than the clock read, so it starts after it.
+            if allocationStacksRequested, #available(macOS 26, *), explicitStartStop || usesExplicitStart == false {
+                startNestedAllocations = AllocationStackRecorder.nestedAllocations()
+                AllocationStackRecorder.enable()
+            }
+            #endif
         }
 
         // And corresponding hook for then the benchmark has finished and capture finishing metrics here
         // This closure will only be called once for a given run though.
         benchmark.measurementPostSynchronization = { _ in
+            #if canImport(MallocInterposerSwift) && canImport(Runtime)
+            if allocationStacksRequested, #available(macOS 26, *) {
+                AllocationStackRecorder.disable()
+                stopNestedAllocations = AllocationStackRecorder.nestedAllocations()
+            }
+            #endif
+
             if performanceCountersRequested {
                 stopPerformanceCounters = operatingSystemStatsProducer.makePerformanceCounters()
             }
@@ -261,9 +308,18 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
                     // peakMemoryResident for OS-sampled resident memory. The leak/scaling arithmetic
                     // lives in BenchmarkExecutor.mallocStatistics(...) so it can be unit-tested
                     // without a live interposer.
+                    #if canImport(Runtime)
+                    let nestedCountDelta = stopNestedAllocations.count - startNestedAllocations.count
+                    let nestedBytesDelta = stopNestedAllocations.bytes - startNestedAllocations.bytes
+                    #else
+                    let nestedCountDelta = 0
+                    let nestedBytesDelta = 0
+                    #endif
                     let mallocMetrics = BenchmarkExecutor.mallocStatistics(
-                        mallocCountDelta: stopMallocStats.mallocCount - startMallocStats.mallocCount,
-                        mallocBytesDelta: stopMallocStats.mallocBytesCount - startMallocStats.mallocBytesCount,
+                        mallocCountDelta: stopMallocStats.mallocCount - startMallocStats.mallocCount
+                            - nestedCountDelta,
+                        mallocBytesDelta: stopMallocStats.mallocBytesCount - startMallocStats.mallocBytesCount
+                            - nestedBytesDelta,
                         mallocSmallDelta: stopMallocStats.mallocSmallCount - startMallocStats.mallocSmallCount,
                         mallocLargeDelta: stopMallocStats.mallocLargeCount - startMallocStats.mallocLargeCount,
                         freeCountDelta: stopMallocStats.freeCount - startMallocStats.freeCount,
@@ -472,6 +528,16 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             MallocInterposerSwift.unhook()
             #endif
         }
+
+        #if canImport(MallocInterposerSwift) && canImport(Runtime)
+        if allocationStacksRequested, #available(macOS 26, *) {
+            AllocationStackRecorder.disable()
+            benchmark.allocationStackReport = AllocationStackSymbolicator.makeReport(
+                iterations: iterations,
+                stacks: AllocationStackRecorder.snapshot()
+            )
+        }
+        #endif
 
         #if canImport(OSLog)
         signPost.endInterval("Benchmark", benchmarkInterval, "\(iterations)")

@@ -13,9 +13,10 @@ let mallocInterposerDependency: Package.Dependency = {
     {
         return .package(path: localPath)
     }
+    // 1.5.0 adds the per-allocation hook used by --allocation-stacks.
     return .package(
         url: "https://github.com/ordo-one/malloc-interposer.git",
-        .upToNextMajor(from: "1.3.0")
+        .upToNextMajor(from: "1.5.0")
     )
 }()
 
@@ -29,10 +30,11 @@ let mallocInterposerDependency: Package.Dependency = {
 // still set by existing CI jobs, the 6.2-vs-6.3 compare script, and downstream
 // users' scripts. Without the alias those would silently keep the interposer on.
 //
-// The "RuntimeInterposer" trait similarly gates the Linux 6.3 ARC runtime
-// interposer. It is compiled out by `--disable-default-traits`, which the static
-// musl build uses — its strong swift_retain/release overrides otherwise collide
-// with the static libswiftCore at link time (duplicate symbols).
+// The "RuntimeInterposer" trait gates the Linux Swift 6.3 ARC runtime interposer.
+// Swift 6.4+ uses the native runtime hooks now that the crash is fixed.
+// Disabling the trait with `--disable-default-traits` lets static musl builds
+// avoid duplicate symbols from the interposer's strong swift_retain/release
+// overrides and the static libswiftCore.
 let environment = ProcessInfo.processInfo.environment
 let disableMallocInterposer = environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
     || environment["BENCHMARK_DISABLE_JEMALLOC"] != nil
@@ -50,7 +52,7 @@ var packageDependencies: [Package.Dependency] = [
     mallocInterposerDependency,
 ]
 
-#if os(Linux) && compiler(>=6.3)
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4)
 // RUNTIME_INTERPOSER_LOCAL_PATH mirrors MALLOC_INTERPOSER_LOCAL_PATH: point it
 // at a local checkout of swift-runtime-interposer to iterate on the interposer
 // alongside this package.
@@ -81,7 +83,7 @@ var benchmarkDependencies: [Target.Dependency] = [
     .product(name: "MallocInterposerSwift", package: "malloc-interposer", condition: .when(traits: ["MallocInterposer"])),
 ]
 
-#if os(Linux) && compiler(>=6.3)
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4)
 benchmarkDependencies += [
     .product(
         name: "SwiftRuntimeInterposerSwift",

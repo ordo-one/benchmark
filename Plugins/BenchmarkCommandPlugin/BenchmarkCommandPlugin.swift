@@ -60,7 +60,7 @@ import PackagePlugin
         let skipTargets = try argumentExtractor.extractSpecifiedTargets(in: context.package, withOption: "skip-target")
         let outputFormats = argumentExtractor.extractOption(named: "format")
         let pathSpecified = argumentExtractor.extractOption(named: "path") // export path
-        let quietRunning = argumentExtractor.extractFlag(named: "quiet")
+        var quietRunning = argumentExtractor.extractFlag(named: "quiet")
         let noProgress = argumentExtractor.extractFlag(named: "no-progress")
         let checkAbsoluteThresholdsPath = argumentExtractor.extractOption(named: "check-absolute-path")
         let skipLoadingBenchmarks = argumentExtractor.extractFlag(named: "skip-loading-benchmark-targets")
@@ -77,6 +77,12 @@ import PackagePlugin
         let scale = argumentExtractor.extractFlag(named: "scale")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
+        let allocationStacks = argumentExtractor.extractFlag(named: "allocation-stacks")
+        let exportAllocationStacks = argumentExtractor.extractFlag(named: "export-allocation-stacks")
+        let allocationStacksExportFormat = argumentExtractor.extractOption(named: "allocation-stacks-export-format")
+        let allocationStacksExportPath = argumentExtractor.extractOption(named: "allocation-stacks-export-path")
+        let allocationStackDepth = argumentExtractor.extractOption(named: "allocation-stack-depth")
+        let allocationStackLimit = argumentExtractor.extractOption(named: "allocation-stack-limit")
         var outputFormat: OutputFormat = .text
         var grouping = "benchmark"
         var exportPath = "."
@@ -118,11 +124,70 @@ import PackagePlugin
             exit(0)
         }
 
+        var allocationStackArgs: [String] = []
+        if allocationStacks > 0 || exportAllocationStacks > 0 {
+            // Recording stacks slows every allocation down, so the results must not end up in
+            // baselines or threshold checks.
+            guard commandToPerform == .run, checkAbsoluteThresholds == 0 else {
+                print("--allocation-stacks and --export-allocation-stacks can only be used with the 'run' command.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append("--allocation-stacks")
+            for (option, values) in [
+                ("allocation-stack-depth", allocationStackDepth), ("allocation-stack-limit", allocationStackLimit),
+            ] {
+                guard let value = values.first else {
+                    continue
+                }
+                guard let number = Int(value), number >= 0, option != "allocation-stack-depth" || number > 0 else {
+                    print("Invalid value '\(value)' for --\(option).")
+                    throw MyError.invalidArgument
+                }
+                allocationStackArgs.append(contentsOf: ["--\(option)", String(number)])
+            }
+        } else if allocationStackDepth.isEmpty == false || allocationStackLimit.isEmpty == false {
+            print("--allocation-stack-depth and --allocation-stack-limit require --allocation-stacks or --export-allocation-stacks.")
+            throw MyError.invalidArgument
+        }
+
+        if exportAllocationStacks > 0 {
+            allocationStackArgs.append("--export-allocation-stacks")
+        }
+        if allocationStacksExportFormat.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-format requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportFormat.count == 1,
+                let exportFormat = allocationStacksExportFormat.first,
+                ["folded", "json"].contains(exportFormat)
+            else {
+                print("Specify one --allocation-stacks-export-format: folded or json.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-format", exportFormat])
+        }
+        if allocationStacksExportPath.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-path requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportPath.count == 1, let stackExportPath = allocationStacksExportPath.first else {
+                print("Specify only one --allocation-stacks-export-path.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-path", stackExportPath])
+        }
+
         if pathSpecified.count > 0 {
             exportPath = pathSpecified.first!
             if pathSpecified.count > 1 {
                 print("Only a single path may be specified, will use the first one specified '\(exportPath)'")
             }
+        }
+
+        if exportAllocationStacks > 0, allocationStacksExportPath.first == "stdout" {
+            quietRunning = max(quietRunning, 1)
         }
 
         if outputFormats.count > 0 {
@@ -277,6 +342,8 @@ import PackagePlugin
         if scale > 0 {
             args.append(contentsOf: ["--scale"])
         }
+
+        args.append(contentsOf: allocationStackArgs)
 
         filterSpecified.forEach { filter in
             args.append(contentsOf: ["--filter", filter])
@@ -511,7 +578,7 @@ import PackagePlugin
         benchmarkTool = tool.path.string
         interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
         #endif
-        #if os(Linux) && compiler(>=6.3)
+        #if os(Linux) && compiler(>=6.3) && compiler(<6.4)
         let swiftRuntimeInterposerLib = toolDirectory
             .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
         #endif
@@ -633,11 +700,16 @@ import PackagePlugin
                         // On Linux we need to set LD_PRELOAD to get the malloc interposer working
                         // while on Darwin this is done with DYLD interpose mechanism
                         #if os(Linux) && compiler(>=6.3)
+                        #if compiler(<6.4)
                         if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
                             writeToStderr(
                                 "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
                             )
                         }
+                        let libraries = [swiftRuntimeInterposerLib, interposerLib]
+                        #else
+                        let libraries = [interposerLib]
+                        #endif
 
                         var environment = ProcessInfo.processInfo.environment
                         // Only preload libraries that were actually built. With the
@@ -645,7 +717,7 @@ import PackagePlugin
                         // exist; preloading a missing path makes ld.so fail every benchmark,
                         // so skip (and note) absent entries instead.
                         var preloadLibraries: [String] = []
-                        for library in [swiftRuntimeInterposerLib, interposerLib] {
+                        for library in libraries {
                             if FileManager.default.fileExists(atPath: library) {
                                 preloadLibraries.append(library)
                             } else {

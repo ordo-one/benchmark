@@ -28,10 +28,10 @@ extension BenchmarkTool {
         case file(FilePath)
     }
 
-    func outputPath(hostIdentifier: String? = nil, fileName: String) -> OutputPath {
+    func outputPath(hostIdentifier: String? = nil, fileName: String, exportPath: String? = nil) -> OutputPath {
         var outputPath: FilePath
 
-        if let path = (thresholdsOperation == nil) ? path : thresholdsPath {
+        if let path = exportPath ?? (thresholdsOperation == nil ? self.path : thresholdsPath) {
             if path == "stdout" {
                 return .stdout
             }
@@ -64,11 +64,12 @@ extension BenchmarkTool {
     func write(
         exportData: String,
         hostIdentifier: String? = nil,
-        fileName: String = "results.txt"
+        fileName: String = "results.txt",
+        exportPath: String? = nil
     ) throws {
         // Set up desired output path and create any intermediate directories for structure as required:
         let outputPath: FilePath
-        switch self.outputPath(hostIdentifier: hostIdentifier, fileName: fileName) {
+        switch self.outputPath(hostIdentifier: hostIdentifier, fileName: fileName, exportPath: exportPath) {
         case .stdout:
             print(exportData)
             return

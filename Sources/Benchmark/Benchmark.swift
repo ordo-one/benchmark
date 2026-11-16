@@ -175,6 +175,9 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     @_documentation(visibility: internal)
     public var measurementPostSynchronization: BenchmarkMeasurementSynchronization?
 
+    /// The allocation stack traces recorded by the last run, when running with `--allocation-stacks`.
+    var allocationStackReport: AllocationStackReport?
+
     // Hook for custom metrics capturing
     public var customMetricMeasurement: BenchmarkCustomMetricMeasurement?
 

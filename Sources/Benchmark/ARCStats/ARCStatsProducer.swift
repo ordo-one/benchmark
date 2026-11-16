@@ -8,7 +8,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
-#if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
 import SwiftRuntimeInterposerSwift
 #else
 import Atomics
@@ -18,7 +18,7 @@ import SwiftRuntimeHooks
 // swiftlint:disable prefer_self_in_static_references
 
 final class ARCStatsProducer {
-    #if os(Linux) && compiler(>=6.3) && canImport(SwiftRuntimeInterposerSwift)
+    #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
     static let usesPreloadedInterposer = true
 
     static func hook() {
@@ -28,6 +28,8 @@ final class ARCStatsProducer {
     static func unhook() {
         SwiftRuntimeInterposerSwift.unhook()
     }
+
+    static var refcountSwizzlingState: Int { -1 }
 
     static func reset() {
         SwiftRuntimeInterposerSwift.reset()
@@ -71,6 +73,12 @@ final class ARCStatsProducer {
         swift_runtime_set_release_hook(nil, nil)
         swift_runtime_set_retain_hook(nil, nil)
         swift_runtime_set_alloc_object_hook(nil, nil)
+    }
+
+    /// 1 if the runtime dispatches retains and releases to the hooks, 0 if it
+    /// bypasses them, -1 if the runtime predates the gate and always dispatches.
+    static var refcountSwizzlingState: Int {
+        Int(swift_runtime_refcount_swizzling_state())
     }
 
     static func reset() {

@@ -358,6 +358,43 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
         return Int(roundedValue)
     }
 
+    /// Converts a raw measurement from this result to the scaling factor used by `other`, so that
+    /// results captured with differing scaling factors can be compared and presented side by side
+    /// using `other`'s time units and scaling factor (e.g. in baseline comparisons).
+    ///
+    /// Raw measurements for metrics using the scaling factor cover `scalingFactor` iterations,
+    /// while throughput is measured in (scaled) measurements per second.
+    public func convertScalingFactor(_ value: Int, to other: BenchmarkResult) -> Int {
+        guard scalingFactor != other.scalingFactor else {
+            return value
+        }
+
+        var converted: Double
+        if metric == .throughput {
+            converted = Double(value) * Double(scalingFactor.rawValue) / Double(other.scalingFactor.rawValue)
+        } else if metric.useScalingFactor {
+            converted = Double(value) * Double(other.scalingFactor.rawValue) / Double(scalingFactor.rawValue)
+        } else {
+            return value
+        }
+        converted.round(.toNearestOrEven)
+        return Int(converted)
+    }
+
+    /// The divisor applied to raw measurements when presenting them in this result's units, i.e. the
+    /// magnitude of the unit shown in the header (a smaller divisor means a finer unit). This mirrors
+    /// what `scale(_:)` (when `scaled`) or `normalize(_:)` use, so two results can be compared to find
+    /// the one with the finer unit before presenting them side by side.
+    public func presentationUnitDivisor(scaled: Bool) -> Int {
+        if metric == .throughput {
+            return scaledScalingFactor.rawValue
+        }
+        if scaled, metric.useScalingFactor, statistics.timeUnits == .automatic {
+            return scaledTimeUnits.divisor
+        }
+        return timeUnits.divisor
+    }
+
     public func normalizeCompare(_ value: Int) -> Int {
         var roundedValue = ((Double(value) * 1_000.0) / Double(timeUnits.factor)) / 1_000.0
         roundedValue.round(.toNearestOrEven)
@@ -666,7 +703,7 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
             appendDeviationResultsFor(
                 lhs.metric,
                 lhsPercentiles[percentile],
-                .absolute(rhsPercentiles[percentile]),
+                .absolute(rhs.convertScalingFactor(rhsPercentiles[percentile], to: lhs)),
                 Self.Percentile(rawValue: percentile)!,
                 thresholds,
                 &thresholdResults,

@@ -94,3 +94,32 @@ package.targets += [
         ]
     )
 ]
+
+// Reproducer for the ARC hook teardown race (another thread releasing objects
+// while the retain/release hooks are removed after the measurement).
+package.targets += [
+    .executableTarget(
+        name: "ARCHooksRaceBenchmark",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/ARCHooksRace",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
+
+// Integration coverage for `--allocation-stacks`
+package.targets += [
+    .executableTarget(
+        name: "AllocationStacksBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/AllocationStacks",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
