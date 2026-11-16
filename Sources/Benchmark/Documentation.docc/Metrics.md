@@ -18,11 +18,15 @@ Currently supported metrics are:
 - term `peakMemoryResident`: The resident memory usage - sampled during runtime
 - term `peakMemoryResidentDelta`: The resident memory usage - sampled during runtime (excluding start of benchmark baseline) 
 - term `peakMemoryVirtual`:  The virtual memory usage - sampled during runtime
-- term `mallocCountSmall`: The number of small malloc calls according to jemalloc
-- term `mallocCountLarge`: The number of large malloc calls according to jemalloc
-- term `mallocCountTotal`: The total number of mallocs according to jemalloc
+- term `mallocCountSmall`: The number of small malloc calls according to the active malloc backend
+- term `mallocCountLarge`: The number of large malloc calls according to the active malloc backend
+- term `mallocCountTotal`: The total number of malloc calls according to the active malloc backend
+- term `freeCountTotal`: The total number of free calls according to the interposer backend
+- term `mallocBytesCount`: The total requested bytes allocated through malloc calls according to the interposer backend
+- term `mallocFreeDelta`: The number of malloc calls minus free calls according to the interposer backend
 - term `allocatedResidentMemory`: The amount of allocated resident memory by the application (not including allocator metadata overhead etc) according to jemalloc
-- term `memoryLeaked`: The number of small+large mallocs - small+large frees in resident memory (just a possible leak)
+- term `memoryLeaked`: Legacy jemalloc resident-byte growth within the measured region
+- term `memoryLeakedBytes`: The requested bytes allocated minus requested bytes freed according to the interposer backend
 - term `syscalls`: The number of syscalls made during the test -- macOS only
 - term `contextSwitches`: The number of context switches made during the test -- macOS only
 - term `threads`: The maximum number of threads in the process under the test (not exact, sampled)

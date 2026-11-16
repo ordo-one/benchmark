@@ -25,12 +25,12 @@ package.targets += [
     .executableTarget(
         name: "BenchmarkDateTime",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark"),
+            .product(name: "Benchmark", package: "benchmark"),
             .product(name: "DateTime", package: "package-datetime"),
         ],
         path: "Benchmarks/DateTime",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -40,11 +40,11 @@ package.targets += [
     .executableTarget(
         name: "Basic",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark")
+            .product(name: "Benchmark", package: "benchmark")
         ],
         path: "Benchmarks/Basic",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -54,12 +54,12 @@ package.targets += [
     .executableTarget(
         name: "HistogramBenchmark",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark"),
+            .product(name: "Benchmark", package: "benchmark"),
             .product(name: "Histogram", package: "hdrhistogram-swift"),
         ],
         path: "Benchmarks/Histogram",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]
@@ -69,11 +69,57 @@ package.targets += [
     .executableTarget(
         name: "P90AbsoluteThresholdsBenchmark",
         dependencies: [
-            .product(name: "Benchmark", package: "package-benchmark")
+            .product(name: "Benchmark", package: "benchmark")
         ],
         path: "Benchmarks/P90AbsoluteThresholds",
         plugins: [
-            .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
+
+// Regression coverage for the malloc interposer: predictable allocation
+// patterns (counts known per iteration) so any drift between jemalloc and
+// interposer code paths is immediately visible in mallocCountTotal /
+// freeCountTotal / mallocFreeDelta / memoryLeakedBytes.
+package.targets += [
+    .executableTarget(
+        name: "MallocInterposerBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/MallocInterposer",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
+
+// Reproducer for the ARC hook teardown race (another thread releasing objects
+// while the retain/release hooks are removed after the measurement).
+package.targets += [
+    .executableTarget(
+        name: "ARCHooksRaceBenchmark",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/ARCHooksRace",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
+        ]
+    )
+]
+
+// Integration coverage for `--allocation-stacks`
+package.targets += [
+    .executableTarget(
+        name: "AllocationStacksBenchmarks",
+        dependencies: [
+            .product(name: "Benchmark", package: "benchmark")
+        ],
+        path: "Benchmarks/AllocationStacks",
+        plugins: [
+            .plugin(name: "BenchmarkPlugin", package: "benchmark")
         ]
     )
 ]

@@ -8,13 +8,44 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
+import SwiftRuntimeInterposerSwift
+#else
 import Atomics
 import SwiftRuntimeHooks
+#endif
 
 // swiftlint:disable prefer_self_in_static_references
 
 final class ARCStatsProducer {
+    #if os(Linux) && compiler(>=6.3) && compiler(<6.4) && canImport(SwiftRuntimeInterposerSwift)
+    static let usesPreloadedInterposer = true
+
+    static func hook() {
+        SwiftRuntimeInterposerSwift.hook()
+    }
+
+    static func unhook() {
+        SwiftRuntimeInterposerSwift.unhook()
+    }
+
+    static var refcountSwizzlingState: Int { -1 }
+
+    static func reset() {
+        SwiftRuntimeInterposerSwift.reset()
+    }
+
+    static func makeARCStats() -> ARCStats {
+        let statistics = SwiftRuntimeInterposerSwift.statistics()
+        return ARCStats(
+            objectAllocCount: statistics.objectAllocCount,
+            retainCount: statistics.retainCount,
+            releaseCount: statistics.releaseCount
+        )
+    }
+    #else
     typealias SwiftRuntimeHook = @convention(c) (UnsafeRawPointer?, UnsafeMutableRawPointer?) -> Void
+    static let usesPreloadedInterposer = false
 
     static var allocCount: UnsafeAtomic<Int> = .create(0)
     static var retainCount: UnsafeAtomic<Int> = .create(0)
@@ -44,6 +75,12 @@ final class ARCStatsProducer {
         swift_runtime_set_alloc_object_hook(nil, nil)
     }
 
+    /// 1 if the runtime dispatches retains and releases to the hooks, 0 if it
+    /// bypasses them, -1 if the runtime predates the gate and always dispatches.
+    static var refcountSwizzlingState: Int {
+        Int(swift_runtime_refcount_swizzling_state())
+    }
+
     static func reset() {
         allocCount.store(0, ordering: .relaxed)
         retainCount.store(0, ordering: .relaxed)
@@ -57,6 +94,7 @@ final class ARCStatsProducer {
             releaseCount: releaseCount.load(ordering: .relaxed)
         )
     }
+    #endif
 }
 
 // swiftlint:enable prefer_self_in_static_references

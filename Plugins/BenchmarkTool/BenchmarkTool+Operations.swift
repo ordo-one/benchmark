@@ -57,9 +57,11 @@ extension BenchmarkTool {
             let benchmarkReply = try read()
 
             switch benchmarkReply {
-            case .result(let benchmark, let results):
+            case .result(benchmark: let benchmark, results: let results):
                 let filteredResults = results.filter { benchmark.configuration.metrics.contains($0.metric) }
                 benchmarkResults[BenchmarkIdentifier(target: target, name: benchmark.name)] = filteredResults
+            case .allocationStacks(benchmark: let benchmark, report: let report):
+                allocationStackReports[BenchmarkIdentifier(target: target, name: benchmark.name)] = report
             case .end:
                 break outerloop
             case .error(let description):

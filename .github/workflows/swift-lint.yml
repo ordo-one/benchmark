@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - '.github/workflows/swiftlint.yml'
+      - '.github/workflows/swift-lint.yml'
       - '.swiftlint.yml'
+      - '.swiftlint_refinement.yml'
       - '**/*.swift'
+
+permissions:
+  contents: read
 
 jobs:
   SwiftLint:

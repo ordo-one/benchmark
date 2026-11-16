@@ -31,7 +31,7 @@ extension BenchmarkTool {
                         let percentiles = result.statistics.percentiles(for: [80.0, 95.0, 99.0]).map { result.scale($0) }
                         let (p80, p95, p99) = (percentiles[0], percentiles[1], percentiles[2])
 
-                        var range: String?
+                        let range: String? = nil
                         var extra: String?
 
                         let stdDeviation = result.statistics.histogram.stdDeviation

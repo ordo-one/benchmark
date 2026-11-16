@@ -11,6 +11,7 @@
 // 'Benchmark' plugin that is responsible for gathering command line arguments and then
 // Running the `BenchmarkTool` for each benchmark target.
 
+@preconcurrency import Foundation
 import PackagePlugin
 
 #if canImport(Darwin)
@@ -25,10 +26,29 @@ import PackagePlugin
 
 @available(macOS 13.0, *)
 @main struct BenchmarkCommandPlugin: CommandPlugin {
+    func writeToStderr(_ message: String) {
+        message.withCString { pointer in
+            _ = write(STDERR_FILENO, pointer, strlen(pointer))
+        }
+    }
+
     func withCStrings(_ strings: [String], scoped: ([UnsafeMutablePointer<CChar>?]) throws -> Void) rethrows {
         let cStrings = strings.map { strdup($0) }
         try scoped(cStrings + [nil])
         cStrings.forEach { free($0) }
+    }
+
+    func shouldEmitRuntimeInterposerWarning(outputFormat: OutputFormat, exportPath: String) -> Bool {
+        guard exportPath == "stdout" else {
+            return true
+        }
+
+        switch outputFormat {
+        case .text, .markdown:
+            return true
+        default:
+            return false
+        }
     }
 
     func performCommand(context: PluginContext, arguments: [String]) throws {
@@ -40,7 +60,7 @@ import PackagePlugin
         let skipTargets = try argumentExtractor.extractSpecifiedTargets(in: context.package, withOption: "skip-target")
         let outputFormats = argumentExtractor.extractOption(named: "format")
         let pathSpecified = argumentExtractor.extractOption(named: "path") // export path
-        let quietRunning = argumentExtractor.extractFlag(named: "quiet")
+        var quietRunning = argumentExtractor.extractFlag(named: "quiet")
         let noProgress = argumentExtractor.extractFlag(named: "no-progress")
         let checkAbsoluteThresholdsPath = argumentExtractor.extractOption(named: "check-absolute-path")
         let checkAbsoluteThresholds =
@@ -53,6 +73,12 @@ import PackagePlugin
         let scale = argumentExtractor.extractFlag(named: "scale")
         let helpRequested = argumentExtractor.extractFlag(named: "help")
         let otherSwiftFlagsSpecified = argumentExtractor.extractOption(named: "Xswiftc")
+        let allocationStacks = argumentExtractor.extractFlag(named: "allocation-stacks")
+        let exportAllocationStacks = argumentExtractor.extractFlag(named: "export-allocation-stacks")
+        let allocationStacksExportFormat = argumentExtractor.extractOption(named: "allocation-stacks-export-format")
+        let allocationStacksExportPath = argumentExtractor.extractOption(named: "allocation-stacks-export-path")
+        let allocationStackDepth = argumentExtractor.extractOption(named: "allocation-stack-depth")
+        let allocationStackLimit = argumentExtractor.extractOption(named: "allocation-stack-limit")
         var outputFormat: OutputFormat = .text
         var grouping = "benchmark"
         var exportPath = "."
@@ -89,9 +115,64 @@ import PackagePlugin
             print("")
             print(help)
             print("")
-            print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+            print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
             print("")
             exit(0)
+        }
+
+        var allocationStackArgs: [String] = []
+        if allocationStacks > 0 || exportAllocationStacks > 0 {
+            // Recording stacks slows every allocation down, so the results must not end up in
+            // baselines or threshold checks.
+            guard commandToPerform == .run, checkAbsoluteThresholds == 0 else {
+                print("--allocation-stacks and --export-allocation-stacks can only be used with the 'run' command.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append("--allocation-stacks")
+            for (option, values) in [
+                ("allocation-stack-depth", allocationStackDepth), ("allocation-stack-limit", allocationStackLimit),
+            ] {
+                guard let value = values.first else {
+                    continue
+                }
+                guard let number = Int(value), number >= 0, option != "allocation-stack-depth" || number > 0 else {
+                    print("Invalid value '\(value)' for --\(option).")
+                    throw MyError.invalidArgument
+                }
+                allocationStackArgs.append(contentsOf: ["--\(option)", String(number)])
+            }
+        } else if allocationStackDepth.isEmpty == false || allocationStackLimit.isEmpty == false {
+            print("--allocation-stack-depth and --allocation-stack-limit require --allocation-stacks or --export-allocation-stacks.")
+            throw MyError.invalidArgument
+        }
+
+        if exportAllocationStacks > 0 {
+            allocationStackArgs.append("--export-allocation-stacks")
+        }
+        if allocationStacksExportFormat.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-format requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportFormat.count == 1,
+                let exportFormat = allocationStacksExportFormat.first,
+                ["folded", "json"].contains(exportFormat)
+            else {
+                print("Specify one --allocation-stacks-export-format: folded or json.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-format", exportFormat])
+        }
+        if allocationStacksExportPath.isEmpty == false {
+            guard exportAllocationStacks > 0 else {
+                print("--allocation-stacks-export-path requires --export-allocation-stacks.")
+                throw MyError.invalidArgument
+            }
+            guard allocationStacksExportPath.count == 1, let stackExportPath = allocationStacksExportPath.first else {
+                print("Specify only one --allocation-stacks-export-path.")
+                throw MyError.invalidArgument
+            }
+            allocationStackArgs.append(contentsOf: ["--allocation-stacks-export-path", stackExportPath])
         }
 
         if pathSpecified.count > 0 {
@@ -99,6 +180,10 @@ import PackagePlugin
             if pathSpecified.count > 1 {
                 print("Only a single path may be specified, will use the first one specified '\(exportPath)'")
             }
+        }
+
+        if exportAllocationStacks > 0, allocationStacksExportPath.first == "stdout" {
+            quietRunning = max(quietRunning, 1)
         }
 
         if outputFormats.count > 0 {
@@ -149,16 +234,56 @@ import PackagePlugin
         let swiftSourceModuleTargets: [SwiftSourceModuleTarget]
         var shouldBuildTargets = true // We don't rebuild the targets when we dont need to execute them, e.g. baseline read/compare
 
-        let packageBenchmarkIdentifier = "package-benchmark"
+        // Accept both the new ("benchmark") and the legacy ("package-benchmark") package
+        // identifiers so consumers that still pin via the old GitHub URL continue to work.
+        let packageBenchmarkIdentifiers: Set<String> = ["benchmark", "package-benchmark"]
         let benchmarkToolName = "BenchmarkTool"
-        let benchmarkTool: PackagePlugin.Path // = try context.tool(named: benchmarkToolName)
+        let benchmarkTool: String // = try context.tool(named: benchmarkToolName)
+        let interposerLib: String
+
+        // Resolve which identifier this consumer actually has the benchmark package under,
+        // so generated boilerplate matches what SPM sees (depends on whether they pinned
+        // the old "package-benchmark" URL or the new "benchmark" URL).
+        let resolvedBenchmarkPackageIdentifier: String = {
+            if packageBenchmarkIdentifiers.contains(context.package.id) {
+                return context.package.id
+            }
+            if let dep = context.package.dependencies.first(where: {
+                packageBenchmarkIdentifiers.contains($0.package.id)
+            }) {
+                return dep.package.id
+            }
+            return "benchmark"
+        }()
+
+        if resolvedBenchmarkPackageIdentifier == "package-benchmark" {
+            print("")
+            print("\u{001B}[33mWarning: this project depends on the benchmark package using its legacy")
+            print("identifier 'package-benchmark'. The repository has been renamed; please update")
+            print("your Package.swift to use the new URL and identifier:")
+            print("")
+            print("  .package(url: \"https://github.com/ordo-one/benchmark\", ...)")
+            print("  .product(name: \"Benchmark\", package: \"benchmark\"),")
+            print("  .plugin(name: \"BenchmarkPlugin\", package: \"benchmark\"),")
+            print("")
+            print("Support for the legacy 'package-benchmark' identifier will be removed in a")
+            print("future release.\u{001B}[0m")
+            print("")
+        }
+
+        #if swift(>=6.0)
+        let packageDirectory = context.package.directoryURL.path(percentEncoded: false)
+        #else
+        let packageDirectory = context.package.directory.string
+        #endif
 
         var args: [String] = [
             benchmarkToolName,
             "--command", commandToPerform.rawValue,
-            "--baseline-storage-path", context.package.directory.string,
+            "--baseline-storage-path", packageDirectory,
             "--format", outputFormat.rawValue,
             "--grouping", grouping,
+            "--benchmark-package-identifier", resolvedBenchmarkPackageIdentifier,
         ]
 
         metricsToUse.forEach { metric in
@@ -214,6 +339,8 @@ import PackagePlugin
             args.append(contentsOf: ["--scale"])
         }
 
+        args.append(contentsOf: allocationStackArgs)
+
         filterSpecified.forEach { filter in
             args.append(contentsOf: ["--filter", filter])
         }
@@ -247,7 +374,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -295,7 +422,7 @@ import PackagePlugin
                 print("")
                 print(help)
                 print("")
-                print("Please visit https://github.com/ordo-one/package-benchmark for more in-depth documentation")
+                print("Please visit https://github.com/ordo-one/benchmark for more in-depth documentation")
                 print("")
                 throw MyError.invalidArgument
             }
@@ -351,25 +478,22 @@ import PackagePlugin
         }
 
         let benchmarkToolModuleTargets: [SwiftSourceModuleTarget]
-        if context.package.id == packageBenchmarkIdentifier {
+        if packageBenchmarkIdentifiers.contains(context.package.id) {
             benchmarkToolModuleTargets = context.package.targets(ofType: SwiftSourceModuleTarget.self)
         } else {
             guard
                 let benchmarkPackage = context.package.dependencies.first(where: {
-                    $0.package.id == packageBenchmarkIdentifier
+                    packageBenchmarkIdentifiers.contains($0.package.id)
                 })
             else {
-                print("Benchmark failed to find the package-benchmark module.")
+                print("Benchmark failed to find the benchmark module.")
                 throw MyError.buildFailed
             }
             benchmarkToolModuleTargets = benchmarkPackage.package.targets(ofType: SwiftSourceModuleTarget.self)
         }
 
         // Build the BenchmarkTool manually in release mode to work around https://github.com/apple/swift-package-manager/issues/7210
-        guard
-            let benchmarkToolModule = benchmarkToolModuleTargets.first(where: {
-                $0.kind == .executable && $0.name == benchmarkToolName
-            })
+        guard let benchmarkToolModule = benchmarkToolModuleTargets.first(where: { $0.kind == .executable && $0.name == benchmarkToolName })
         else {
             print("Benchmark failed to find the BenchmarkTool target.")
             throw MyError.buildFailed
@@ -396,21 +520,40 @@ import PackagePlugin
         }
 
         let tool = buildResult.builtArtifacts.first(where: {
-            $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
+            #if swift(>=6.0)
+            return $0.kind == .executable && $0.url.lastPathComponent == benchmarkToolName
+            #else
+            return $0.kind == .executable && $0.path.lastComponent == benchmarkToolName
+            #endif
         })
 
         guard let tool else {
             throw MyError.buildFailed
         }
 
-        benchmarkTool = tool.path
+        #if swift(>=6.0)
+        let toolDirectory = tool.url.deletingLastPathComponent()
+        benchmarkTool = tool.url.path(percentEncoded: false)
+        interposerLib = toolDirectory.appending(path: "libMallocInterposerSwift.so").path(percentEncoded: false)
+        #else
+        let toolDirectory = tool.path.removingLastComponent()
+        benchmarkTool = tool.path.string
+        interposerLib = toolDirectory.appending(subpath: "libMallocInterposerSwift.so").string
+        #endif
+        #if os(Linux) && compiler(>=6.3) && compiler(<6.4)
+        let swiftRuntimeInterposerLib = toolDirectory
+            .appending(path: "libSwiftRuntimeInterposerSwift.so").path(percentEncoded: false)
+        #endif
 
         let filteredTargets =
             swiftSourceModuleTargets
             .filter { $0.kind == .executable }
             .filter { benchmark in
-                let path = benchmark.directory.removingLastComponent()
-                return path.lastComponent == "Benchmarks" ? true : false
+                #if swift(>=6.0)
+                return benchmark.directoryURL.deletingLastPathComponent().lastPathComponent == "Benchmarks"
+                #else
+                return benchmark.directory.removingLastComponent().lastComponent == "Benchmarks"
+                #endif
             }
             .filter { benchmark in
                 swiftSourceModuleTargets.first(where: { $0.name == benchmark.name }) != nil ? true : false
@@ -459,7 +602,11 @@ import PackagePlugin
                 // Filter out all executable products which are Benchmarks we should run
                 let benchmarks = buildResult.builtArtifacts
                     .filter { benchmark in
+                        #if swift(>=6.0)
+                        filteredTargets.first(where: { $0.name == benchmark.url.lastPathComponent }) != nil ? true : false
+                        #else
                         filteredTargets.first(where: { $0.name == benchmark.path.lastComponent }) != nil ? true : false
+                        #endif
                     }
 
                 if benchmarks.isEmpty {
@@ -467,7 +614,11 @@ import PackagePlugin
                 }
 
                 benchmarks.forEach { benchmark in
+                    #if swift(>=6.0)
+                    args.append(contentsOf: ["--benchmark-executable-paths", benchmark.url.path(percentEncoded: false)])
+                    #else
                     args.append(contentsOf: ["--benchmark-executable-paths", benchmark.path.string])
+                    #endif
                 }
             }
         }
@@ -477,7 +628,7 @@ import PackagePlugin
         try withCStrings(args) { cArgs in
             if debug > 0 {
                 print("To debug, start \(benchmarkToolName) in LLDB using:")
-                print("lldb \(benchmarkTool.string)")
+                print("lldb \(benchmarkTool)")
                 print("")
                 print("Then launch \(benchmarkToolName) with:")
                 print("run \(args.dropFirst().joined(separator: " "))")
@@ -485,8 +636,53 @@ import PackagePlugin
                 return
             }
 
+            // On Linux we need to set LD_PRELOAD to get the malloc interposer working
+            // while on Darwin this is done with DYLD interpose mechanism
+            #if os(Linux) && compiler(>=6.3)
+            #if compiler(<6.4)
+            if shouldEmitRuntimeInterposerWarning(outputFormat: outputFormat, exportPath: exportPath) {
+                writeToStderr(
+                    "\u{001B}[33mWarning: running with the Swift runtime interposer on Linux to avoid the Swift 6.3 runtime hook crash. See https://github.com/ordo-one/benchmark/issues/349\u{001B}[0m\n"
+                )
+            }
+            let libraries = [swiftRuntimeInterposerLib, interposerLib]
+            #else
+            let libraries = [interposerLib]
+            #endif
+
+            var environment = ProcessInfo.processInfo.environment
+            // Only preload libraries that were actually built. With the
+            // MallocInterposer trait disabled, libMallocInterposerSwift.so won't
+            // exist; preloading a missing path makes ld.so fail every benchmark,
+            // so skip (and note) absent entries instead.
+            var preloadLibraries: [String] = []
+            for library in libraries {
+                if FileManager.default.fileExists(atPath: library) {
+                    preloadLibraries.append(library)
+                } else {
+                    writeToStderr("Note: skipping LD_PRELOAD of \(library) (not built)\n")
+                }
+            }
+            if let existingPreload = environment["LD_PRELOAD"], existingPreload.isEmpty == false {
+                preloadLibraries.append(existingPreload)
+            }
+            if preloadLibraries.isEmpty == false {
+                environment["LD_PRELOAD"] = preloadLibraries.joined(separator: ":")
+            }
+
+            let envp = environment.map { "\($0.key)=\($0.value)" }.compactMap { $0.withCString(strdup) } + [nil]
+            defer {
+                for i in 0..<envp.count - 1 {
+                    free(envp[i])
+                }
+            }
+
             var pid: pid_t = 0
-            var status = posix_spawn(&pid, benchmarkTool.string, nil, nil, cArgs, environ)
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, envp)
+            #else
+            var pid: pid_t = 0
+            var status = posix_spawn(&pid, benchmarkTool, nil, nil, cArgs, environ)
+            #endif
 
             if status == 0 {
                 if waitpid(pid, &status, 0) != -1 {

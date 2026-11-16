@@ -27,6 +27,10 @@
 - ``BenchmarkMetric/wallClock``
 - ``BenchmarkMetric/cpuTotal``
 - ``BenchmarkMetric/mallocCountTotal``
+- ``BenchmarkMetric/freeCountTotal``
+- ``BenchmarkMetric/mallocBytesCount``
+- ``BenchmarkMetric/mallocFreeDelta``
+- ``BenchmarkMetric/memoryLeakedBytes``
 - ``BenchmarkMetric/throughput``
 - ``BenchmarkMetric/peakMemoryResident``
 - ``BenchmarkMetric/memoryLeaked``
@@ -41,7 +45,11 @@
 - ``BenchmarkMetric/mallocCountSmall``
 - ``BenchmarkMetric/mallocCountLarge``
 - ``BenchmarkMetric/mallocCountTotal``
+- ``BenchmarkMetric/freeCountTotal``
+- ``BenchmarkMetric/mallocBytesCount``
+- ``BenchmarkMetric/mallocFreeDelta``
 - ``BenchmarkMetric/memoryLeaked``
+- ``BenchmarkMetric/memoryLeakedBytes``
 - ``BenchmarkMetric/allocatedResidentMemory``
 
 ### Reference Counting (retain/release)

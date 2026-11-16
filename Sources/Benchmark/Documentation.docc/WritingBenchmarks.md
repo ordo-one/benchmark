@@ -425,4 +425,4 @@ The Benchmark SwiftPM plugins executes the `BenchmarkTool` executable which is t
 
 The `BenchmarkTool` in turns runs each executable target that is defined and uses JSON to communicate with the target process over pipes.
 
-The executable benchmark targets just implements the actual benchmark tests, as much boilerplate code as possible has been hidden. The executable benchmark must depend on the `Benchmark` library target which also will pull in `jemalloc` for malloc stats when the `Jemalloc` package trait is enabled (it is enabled by default). See <doc:GettingStarted> for how to disable it if needed.
+The executable benchmark targets just implements the actual benchmark tests, as much boilerplate code as possible has been hidden. The executable benchmark must depend on the `Benchmark` library target which also will pull in the malloc backend for malloc stats — the `malloc-interposer` package (`MallocInterposer` trait) on Swift 6.3+, or `jemalloc` (`Jemalloc` trait) on Swift 6.2 and 5.x, both enabled by default. See <doc:GettingStarted> for how to disable it if needed.

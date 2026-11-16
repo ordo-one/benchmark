@@ -67,6 +67,9 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "The name of the new benchmark target to create")
     var targetName: String?
 
+    @Option(name: .long, help: "The SPM package identifier under which the benchmark package is depended on (used by `benchmark init`)")
+    var benchmarkPackageIdentifier: String = "benchmark"
+
     @Option(name: .long, help: "The operation to perform on the specified baselines")
     var baselineOperation: BaselineOperation?
 
@@ -125,6 +128,24 @@ struct BenchmarkTool: AsyncParsableCommand {
     @Option(name: .long, help: "Benchmarks matching the regexp filter that should be skipped")
     var skip: [String] = []
 
+    @Flag(name: .long, help: "Record allocation stacks and print them")
+    var allocationStacks = false
+
+    @Flag(name: .long, help: "Record and export allocation stacks to --allocation-stacks-export-path")
+    var exportAllocationStacks = false
+
+    @Option(name: .long, help: "The allocation stack export format: folded or json (default: folded)")
+    var allocationStacksExportFormat: AllocationStacksExportFormat?
+
+    @Option(name: .long, help: "The allocation stack export directory, or stdout (default: current directory)")
+    var allocationStacksExportPath: String?
+
+    @Option(name: .long, help: "The maximum number of frames captured per allocation stack trace")
+    var allocationStackDepth: Int?
+
+    @Option(name: .long, help: "The maximum number of allocation stacks reported per benchmark, 0 for all")
+    var allocationStackLimit: Int = 20
+
     var inputFD: CInt = 0
     var outputFD: CInt = 0
 
@@ -132,6 +153,7 @@ struct BenchmarkTool: AsyncParsableCommand {
     var benchmarkBaselines: [BenchmarkBaseline] = [] // The baselines read from disk, merged + current run if needed
     var comparisonBaseline: BenchmarkBaseline?
     var checkBaseline: BenchmarkBaseline?
+    var allocationStackReports: [BenchmarkIdentifier: AllocationStackReport] = [:]
 
     var failedBenchmarkList: [String] = []
 
@@ -225,6 +247,31 @@ struct BenchmarkTool: AsyncParsableCommand {
         }
     }
 
+    var allocationStacksToStdout: Bool {
+        exportAllocationStacks && allocationStacksExportPath == "stdout"
+    }
+
+    mutating func validate() throws {
+        if allocationStacksExportFormat != nil, exportAllocationStacks == false {
+            throw ValidationError("--allocation-stacks-export-format requires --export-allocation-stacks.")
+        }
+        if allocationStacksExportPath != nil, exportAllocationStacks == false {
+            throw ValidationError("--allocation-stacks-export-path requires --export-allocation-stacks.")
+        }
+        if exportAllocationStacks {
+            allocationStacks = true
+        }
+        if allocationStacks {
+            guard command == .run, checkAbsolute == false, checkAbsolutePath == nil else {
+                throw ValidationError("--allocation-stacks and --export-allocation-stacks can only be used with the 'run' command.")
+            }
+        }
+        if allocationStacksToStdout {
+            quiet = true
+            noProgress = true
+        }
+    }
+
     mutating func run() async throws {
         // Flush stdout so we see any failures clearly
         setbuf(stdout, nil)
@@ -232,6 +279,12 @@ struct BenchmarkTool: AsyncParsableCommand {
         guard command != .`init` else {
             createBenchmarkTarget()
             return
+        }
+
+        // Fail before running anything
+        if allocationStacks, let reason = BenchmarkRunner.allocationStacksUnsupportedReason() {
+            print(reason)
+            exitBenchmark(exitCode: .genericFailure)
         }
 
         // Skip reading baselines for baseline operations not needing them
@@ -342,7 +395,13 @@ struct BenchmarkTool: AsyncParsableCommand {
             )
         )
 
-        try postProcessBenchmarkResults()
+        if allocationStacksToStdout == false {
+            try postProcessBenchmarkResults()
+        }
+
+        if allocationStacks {
+            try reportAllocationStacks()
+        }
 
         if failedBenchmarkRuns > 0 {
             exitBenchmark(exitCode: .benchmarkJobFailed)
@@ -372,6 +431,15 @@ struct BenchmarkTool: AsyncParsableCommand {
         var benchmarkResults: BenchmarkResults = [:]
         let fromChild = try FileDescriptor.pipe()
         let toChild = try FileDescriptor.pipe()
+
+        // Close the parent-side ends of the pipes whenever we return, regardless of how we exit, so we don't
+        // leak two file descriptors for every benchmark we run. (The child-side ends are closed separately,
+        // right after spawning, so the parent's reads see EOF when the child exits.)
+        defer {
+            try? toChild.writeEnd.close()
+            try? fromChild.readEnd.close()
+        }
+
         let path = FilePath(benchmarkPath)
         var args: [String] = [
             path.lastComponent!.description,
@@ -379,6 +447,20 @@ struct BenchmarkTool: AsyncParsableCommand {
             "--output-fd", fromChild.writeEnd.rawValue.description,
             "--quiet", noProgress.description,
         ]
+
+        // Machine-readable output to stdout shares fd 1 with the child, so a non-fatal metric
+        // warning printed by the child would corrupt it. Mirror `shouldEmitRuntimeInterposerWarning`
+        // and silence those warnings in that case (the child's fatal-metric abort is never silenced).
+        let machineOutputToStdout: Bool
+        switch format {
+        case .text, .markdown:
+            machineOutputToStdout = false
+        default:
+            machineOutputToStdout = self.path == "stdout"
+        }
+        if machineOutputToStdout || allocationStacksToStdout {
+            args.append("--suppress-metric-warnings")
+        }
 
         if checkAbsolute {
             args.append("--check-absolute")
@@ -388,15 +470,23 @@ struct BenchmarkTool: AsyncParsableCommand {
             args.append(contentsOf: ["--time-units", timeUnits.rawValue])
         }
 
+        // Only the run itself records stacks; the child would reject the flag for other commands' replies.
+        if allocationStacks, benchmarkCommand == .run {
+            args.append("--allocation-stacks")
+            if let allocationStackDepth {
+                args.append(contentsOf: ["--allocation-stack-depth", allocationStackDepth.description])
+            }
+        }
+
         inputFD = fromChild.readEnd.rawValue
         outputFD = toChild.writeEnd.rawValue
 
         try withCStrings(args) { cArgs in
             var status = posix_spawn(&pid, path.string, nil, nil, cArgs, environ)
 
-            // Close child ends of the pipes
-            try toChild.readEnd.close()
-            try fromChild.writeEnd.close()
+            // Close child ends of the pipes (independently, so a failure closing one still closes the other)
+            try? toChild.readEnd.close()
+            try? fromChild.writeEnd.close()
 
             do {
                 switch benchmarkCommand {

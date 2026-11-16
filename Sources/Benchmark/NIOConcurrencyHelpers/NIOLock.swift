@@ -177,7 +177,12 @@ final class LockStorage<Value>: ManagedBuffer<Value, LockPrimitive> {
     }
 }
 
-extension LockStorage: @unchecked Sendable {}
+// This compiler guard is here because `ManagedBuffer` is already declaring Sendable
+// unavailability after 6.1, which `LockStorage` inherits.
+#if compiler(<6.2)
+@available(*, unavailable)
+extension LockStorage: Sendable {}
+#endif
 
 /// A threading lock based on `libpthread` instead of `libdispatch`.
 ///
@@ -245,7 +250,7 @@ extension NIOLock {
     }
 }
 
-extension NIOLock: Sendable {}
+extension NIOLock: @unchecked Sendable {}
 
 extension UnsafeMutablePointer {
     @inlinable

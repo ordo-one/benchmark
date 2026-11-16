@@ -1,6 +1,97 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.3
 
 import PackageDescription
+
+import class Foundation.ProcessInfo
+
+// When MALLOC_INTERPOSER_LOCAL_PATH is set, use a local checkout of the
+// malloc-interposer package instead of the published GitHub URL. Useful
+// when iterating on the interposer alongside this package.
+let mallocInterposerDependency: Package.Dependency = {
+    if let localPath = ProcessInfo.processInfo.environment["MALLOC_INTERPOSER_LOCAL_PATH"],
+        localPath.isEmpty == false
+    {
+        return .package(path: localPath)
+    }
+    // 1.5.0 adds the per-allocation hook used by --allocation-stacks.
+    return .package(
+        url: "https://github.com/ordo-one/malloc-interposer.git",
+        .upToNextMajor(from: "1.5.0")
+    )
+}()
+
+// The malloc interposer is enabled by default. Turn off the "MallocInterposer"
+// trait (or set BENCHMARK_DISABLE_MALLOC_INTERPOSER) to build without it:
+// allocations then avoid the interposer's per-allocation size header, at the
+// cost of the interposer-backed malloc metrics on Swift 6.3+.
+//
+// BENCHMARK_DISABLE_JEMALLOC is honored as a backward-compatible alias: it was
+// the opt-out on Swift <= 6.2 (where it dropped the jemalloc backend) and is
+// still set by existing CI jobs, the 6.2-vs-6.3 compare script, and downstream
+// users' scripts. Without the alias those would silently keep the interposer on.
+//
+// The "RuntimeInterposer" trait gates the Linux Swift 6.3 ARC runtime interposer.
+// Swift 6.4+ uses the native runtime hooks now that the crash is fixed.
+// Disabling the trait with `--disable-default-traits` lets static musl builds
+// avoid duplicate symbols from the interposer's strong swift_retain/release
+// overrides and the static libswiftCore.
+let environment = ProcessInfo.processInfo.environment
+let disableMallocInterposer = environment["BENCHMARK_DISABLE_MALLOC_INTERPOSER"] != nil
+    || environment["BENCHMARK_DISABLE_JEMALLOC"] != nil
+var defaultTraits: Set<String> = ["MallocInterposer", "RuntimeInterposer"]
+if disableMallocInterposer {
+    defaultTraits.remove("MallocInterposer")
+}
+
+var packageDependencies: [Package.Dependency] = [
+    .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
+    .package(url: "https://github.com/apple/swift-argument-parser.git", .upToNextMajor(from: "1.6.0")),
+    .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
+    .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.4")),
+    .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
+    mallocInterposerDependency,
+]
+
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4)
+// RUNTIME_INTERPOSER_LOCAL_PATH mirrors MALLOC_INTERPOSER_LOCAL_PATH: point it
+// at a local checkout of swift-runtime-interposer to iterate on the interposer
+// alongside this package.
+packageDependencies += [
+    {
+        if let localPath = ProcessInfo.processInfo.environment["RUNTIME_INTERPOSER_LOCAL_PATH"],
+            localPath.isEmpty == false
+        {
+            return .package(path: localPath)
+        }
+        return .package(
+            url: "https://github.com/ordo-one/swift-runtime-interposer.git",
+            .upToNextMajor(from: "2.0.0")
+        )
+    }()
+]
+#endif
+
+var benchmarkDependencies: [Target.Dependency] = [
+    .product(name: "Histogram", package: "hdrhistogram-swift"),
+    .product(name: "ArgumentParser", package: "swift-argument-parser"),
+    .product(name: "SystemPackage", package: "swift-system"),
+    .byNameItem(name: "CDarwinOperatingSystemStats", condition: .when(platforms: [.macOS, .iOS])),
+    .byNameItem(name: "CLinuxOperatingSystemStats", condition: .when(platforms: [.linux])),
+    .product(name: "Atomics", package: "swift-atomics"),
+    "SwiftRuntimeHooks",
+    "BenchmarkShared",
+    .product(name: "MallocInterposerSwift", package: "malloc-interposer", condition: .when(traits: ["MallocInterposer"])),
+]
+
+#if os(Linux) && compiler(>=6.3) && compiler(<6.4)
+benchmarkDependencies += [
+    .product(
+        name: "SwiftRuntimeInterposerSwift",
+        package: "swift-runtime-interposer",
+        condition: .when(platforms: [.linux], traits: ["RuntimeInterposer"])
+    ),
+]
+#endif
 
 let package = Package(
     name: "Benchmark",
@@ -17,31 +108,15 @@ let package = Package(
         ),
     ],
     traits: [
-        .trait(name: "Jemalloc"),
-        .default(enabledTraits: ["Jemalloc"]),
+        .trait(name: "MallocInterposer"),
+        .trait(name: "RuntimeInterposer"),
+        .default(enabledTraits: defaultTraits),
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-system.git", .upToNextMajor(from: "1.1.0")),
-        .package(url: "https://github.com/apple/swift-argument-parser.git", "1.1.0" ..< "1.6.0"),
-        .package(url: "https://github.com/ordo-one/TextTable.git", .upToNextMajor(from: "0.0.1")),
-        .package(url: "https://github.com/HdrHistogram/hdrhistogram-swift.git", .upToNextMajor(from: "0.1.4")),
-        .package(url: "https://github.com/apple/swift-atomics.git", .upToNextMajor(from: "1.0.0")),
-        .package(url: "https://github.com/ordo-one/package-jemalloc.git", .upToNextMajor(from: "1.0.0")),
-    ],
+    dependencies: packageDependencies,
     targets: [
         .target(
             name: "Benchmark",
-            dependencies: [
-                .product(name: "Histogram", package: "hdrhistogram-swift"),
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "SystemPackage", package: "swift-system"),
-                .byNameItem(name: "CDarwinOperatingSystemStats", condition: .when(platforms: [.macOS, .iOS])),
-                .byNameItem(name: "CLinuxOperatingSystemStats", condition: .when(platforms: [.linux])),
-                .product(name: "Atomics", package: "swift-atomics"),
-                "SwiftRuntimeHooks",
-                "BenchmarkShared",
-                .product(name: "jemalloc", package: "package-jemalloc", condition: .when(platforms: [.macOS, .linux], traits: ["Jemalloc"])),
-            ],
+            dependencies: benchmarkDependencies,
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // Plugins used by users of the package
