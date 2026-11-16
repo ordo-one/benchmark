@@ -11,7 +11,7 @@
 import Dispatch
 import Foundation
 
-// swiftlint:disable file_length identifier_name
+// swiftlint:disable file_length
 
 /// Defines a benchmark
 public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type_body_length
@@ -475,6 +475,18 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
             runAsync()
         }
     }
+
+    // Used by the BenchmarkRunner, from an async context: awaits an async closure in place, where
+    // `runAsync()` blocks the calling thread, here a cooperative one, and so deadlocks when the
+    // closure needs another thread of the pool (another task, an actor).
+    func runAwaitingClosure() async {
+        guard closure == nil, let asyncClosure else {
+            return run()
+        }
+        _startMeasurement(false)
+        await asyncClosure(self)
+        _stopMeasurement(false)
+    }
 }
 
 public extension Benchmark {
@@ -605,4 +617,4 @@ public struct ThreadSafeProperty<T> {
     }
 }
 
-// swiftlint:enable file_length identifier_name
+// swiftlint:enable file_length

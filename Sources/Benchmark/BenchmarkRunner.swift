@@ -310,7 +310,7 @@ public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite { 
                             try suppressor.suppressOutput()
                         }
 
-                        results = benchmarkExecutor.run(benchmark)
+                        results = await benchmarkExecutor.run(benchmark)
 
                         if quiet {
                             try suppressor.restoreOutput()

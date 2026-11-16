@@ -81,7 +81,8 @@ enum AllocationStackSymbolicator {
 
     // Demangled names carry no module prefix, so match the harness by type and member.
     static let harnessSymbols = [
-        "Benchmark.run()", "Benchmark.runAsync()", "Benchmark.init(", "BenchmarkExecutor.", "BenchmarkRunner.",
+        "Benchmark.run()", "Benchmark.runAsync()", "Benchmark.runAwaitingClosure()", "Benchmark.init(",
+        "BenchmarkExecutor.", "BenchmarkRunner.",
     ]
 
     /// Frames of the benchmark harness that calls into the benchmark closure.
