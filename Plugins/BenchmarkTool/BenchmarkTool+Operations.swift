@@ -104,7 +104,7 @@ extension BenchmarkTool {
             case .read:
                 print("Reading thresholds from \"\(thresholdsPath)\"")
 
-                var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]] = [:]
+                var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThreshold]] = [:]
                 try benchmarks.forEach { benchmark in
                     if try shouldIncludeBenchmark(benchmark.baseName) {
                         if let thresholds = BenchmarkTool.makeBenchmarkThresholds(
@@ -150,7 +150,7 @@ extension BenchmarkTool {
                     }
                 }
 
-                var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]] = [:]
+                var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThreshold]] = [:]
 
                 if noProgress == false {
                     print("")
@@ -303,7 +303,7 @@ extension BenchmarkTool {
                         }
                     }
 
-                    var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]] =
+                    var p90Thresholds: [BenchmarkIdentifier: [BenchmarkMetric: BenchmarkThreshold]] =
                         [:]
 
                     if let benchmarkPath = checkAbsolutePath { // load statically defined thresholds for .p90
