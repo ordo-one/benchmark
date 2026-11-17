@@ -205,6 +205,17 @@ public extension BenchmarkThreshold.RelativeOrRange {
             }
         }
 
+        /// A relative threshold with an integer base whose tolerance contains all of `bounds`.
+        public init(covering bounds: ClosedRange<Double>) {
+            let base = ((bounds.lowerBound + bounds.upperBound) / 2).rounded()
+            let diff = max(bounds.upperBound - base, base - bounds.lowerBound)
+            let diffPercentage = (base == 0) ? 0 : (diff / base * 100)
+            self.init(
+                base: Int(base),
+                tolerancePercentage: Statistics.roundToDecimalPlaces(diffPercentage, 2, .up)
+            )
+        }
+
         /// Returns whether or not the value satisfies this relative range, as well as the
         /// percentage of the deviation of the value.
         public func contains(_ value: Int) -> (contains: Bool, deviation: Double) {

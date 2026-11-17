@@ -357,16 +357,7 @@ extension BenchmarkTool {
                                 }
 
                                 if wantsRelative {
-                                    /// Calculate base and tolerancePercentage
-                                    let base = (min + max) / 2
-                                    let diff = max - base
-                                    let diffPercentage = (base == 0) ? 0 : (diff / base * 100)
-                                    let tolerancePercentage = Statistics.roundToDecimalPlaces(diffPercentage, 2, .up)
-
-                                    relativeResult = .init(
-                                        base: Int(base),
-                                        tolerancePercentage: tolerancePercentage
-                                    )
+                                    relativeResult = .init(covering: min...max)
                                 }
                             }
                         }
