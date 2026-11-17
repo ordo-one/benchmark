@@ -584,7 +584,7 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
         switch rhs {
         case .absolute(let rhs):
             let absoluteDifference = lhs - rhs
-            let relativeDifference = (rhs != 0 ? (Double(absoluteDifference) / Double(rhs)) : 0.0)
+            let relativeDifference = (rhs != 0 ? (Double(absoluteDifference) / Double(rhs) * 100) : 0.0)
 
             if let threshold = thresholdsFromCode.relative[percentile],
                 !(-threshold...threshold).contains(relativeDifference)
