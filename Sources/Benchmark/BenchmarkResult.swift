@@ -496,39 +496,6 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
     }
 
     public struct ThresholdDeviation {
-        public enum Deviation {
-            case absolute(comparedTo: Int, difference: Int, tolerance: Int)
-            case relative(comparedTo: Int, differencePercentage: Double, tolerancePercentage: Double)
-            case range(min: Int, max: Int)
-
-            public var isRelative: Bool {
-                switch self {
-                case .relative:
-                    return true
-                case .absolute, .range:
-                    return false
-                }
-            }
-
-            public var isRange: Bool {
-                switch self {
-                case .range:
-                    return true
-                case .absolute, .relative:
-                    return false
-                }
-            }
-
-            public var isAbsolute: Bool {
-                switch self {
-                case .absolute:
-                    return true
-                case .relative, .range:
-                    return false
-                }
-            }
-        }
-
         public let name: String
         public let target: String
         public let metric: BenchmarkMetric
@@ -554,7 +521,7 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
     }
 
     // swiftlint:disable function_parameter_count
-    func appendDeviationResultsFor(
+    func appendDeviationResultsFor( // swiftlint:disable:this function_body_length
         _ metric: BenchmarkMetric,
         _ lhs: Int,
         /// Either absolute values or thresholds from static threshold files.
@@ -566,7 +533,6 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
         _ name: String = "unknown name",
         _ target: String = "unknown target"
     ) {
-
         let needsReverseComparison = metric.polarity == .prefersLarger
         /// By default, exceeding a threshold is a regression.
         /// If `needsReverseComparison` then exceeding a threshold is an improvement.
@@ -737,6 +703,42 @@ public struct BenchmarkResult: Codable, Comparable, Equatable {
         )
 
         return thresholdResults
+    }
+}
+
+@_documentation(visibility: internal)
+public extension BenchmarkResult.ThresholdDeviation {
+    enum Deviation {
+        case absolute(comparedTo: Int, difference: Int, tolerance: Int)
+        case relative(comparedTo: Int, differencePercentage: Double, tolerancePercentage: Double)
+        case range(min: Int, max: Int)
+
+        public var isRelative: Bool {
+            switch self {
+            case .relative:
+                return true
+            case .absolute, .range:
+                return false
+            }
+        }
+
+        public var isRange: Bool {
+            switch self {
+            case .range:
+                return true
+            case .absolute, .relative:
+                return false
+            }
+        }
+
+        public var isAbsolute: Bool {
+            switch self {
+            case .absolute:
+                return true
+            case .relative, .range:
+                return false
+            }
+        }
     }
 }
 
