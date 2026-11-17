@@ -682,9 +682,6 @@ import PackagePlugin
 
                 return Result<Void, Error> {
                     try withCStrings(args) { cArgs in
-                        /// We'll decrement this in the success path
-                        allFailureCount += 1
-
                         if debug > 0 {
                             print("To debug, start \(benchmarkToolName) in LLDB using:")
                             print("lldb \(benchmarkTool)")
@@ -694,6 +691,9 @@ import PackagePlugin
                             print("")
                             return
                         }
+
+                        /// We'll decrement this in the success and failed-benchmark-job paths
+                        allFailureCount += 1
 
                         var pid: pid_t = 0
 
@@ -766,6 +766,7 @@ import PackagePlugin
                                 case .thresholdImprovement:
                                     throw MyError.benchmarkThresholdImprovement
                                 case .benchmarkJobFailed:
+                                    allFailureCount -= 1
                                     failedBenchmarkCount += 1
                                 case .noPermissions:
                                     throw MyError.noPermissions
