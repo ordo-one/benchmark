@@ -40,6 +40,10 @@ swift package benchmark <command verb> [<options>]
 - term `--metric`: Specifies that the benchmark run should use a specific metric instead of the ones defined by the benchmarks
 - term `--no-progress`: Specifies that benchmark progress information should not be displayed
 - term `--check-absolute`: Set to true if thresholds should be checked against an absolute reference point rather than delta between baselines.
+- term `--relative`: Ensure `thresholds update` writes relative thresholds (`base` and `tolerancePercentage`) to the static threshold files, see <doc:ComparingBenchmarksCI>.
+- term `--range`: Ensure `thresholds update` writes range thresholds (`min` and `max`) to the static threshold files, see <doc:ComparingBenchmarksCI>.
+- term `--run-count <count>`: The number of times `thresholds update` repeatedly runs the benchmarks, with `--relative` or `--range` widening the thresholds after each run. Default is 5.
+- term `--skip-loading-benchmark-targets`: Skip building the benchmark targets when `thresholds check` checks a stored baseline. `Benchmark.Configuration.thresholds` tolerances set in code won't be loaded.
 - term `--grouping <grouping>`: The grouping to use, one of: ["metric", "benchmark"]. default is 'benchmark'
 - term `--benchmark-build-configuration <configuration>`: Build configuration to build the benchmark targets with, one of: ["debug", "release"]. Default is "release".
 - term `--allocation-stacks`: Record the stack trace of every allocation in the measured region and print the unique stacks sorted by allocation count, see <doc:AllocationStacks>.

@@ -69,6 +69,18 @@ let help =
                           a specific check against a given absolute reference.).
                           If this is enabled, zero or one baselines should be specified for the check operation.
                           By default, thresholds are checked comparing two baselines, or a baseline and a benchmark run.
+    --skip-loading-benchmark-targets
+                            Specifies that thresholds check command should skip loading benchmark targets.
+                            Use this flag to skip unnecessary building of benchmark targets and loading of benchmark results, to save time.
+                            This flag is specially useful when combined with static threshold files that contain the newly supported relative or range thresholds.
+                            Requires a stored baseline to check, since no benchmarks are built to run.
+    --run-count <run-count> The number of times to run each benchmark in thresholds update operation.
+                            This is only valid when --relative or --range are also specified.
+                            When combined with --relative or --range flags, this option will run the benchmarks multiple times to calculate
+                            relative or range thresholds, and each time it'll widen the threshold tolerances according to the new result.
+                            Defaults to 5.
+    --relative              Specifies that thresholds update command should output relative thresholds (`base` and `tolerancePercentage`) to the static files.
+    --range                 Specifies that thresholds update command should output min-max range thresholds (`min` and `max`) to the static files.
     --check-absolute-path <check-absolute-path>
                           The path from which p90 thresholds will be loaded for absolute threshold checks.
                           This implicitly sets --check-absolute to true as well.
