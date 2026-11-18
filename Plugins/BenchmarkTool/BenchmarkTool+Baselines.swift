@@ -451,8 +451,7 @@ extension BenchmarkBaseline: Equatable {
                             benchmarks,
                             name: lhsBenchmarkIdentifier.name,
                             target: lhsBenchmarkIdentifier.target,
-                            metric: lhsBenchmarkResult.metric,
-                            defaultThresholds: lhsBenchmarkResult.thresholds ?? BenchmarkThresholds.default
+                            metric: lhsBenchmarkResult.metric
                         )
 
                         let deviationResults = lhsBenchmarkResult.deviationsComparedWith(
@@ -485,7 +484,7 @@ extension BenchmarkBaseline: Equatable {
     public func failsAbsoluteThresholdChecks(
         benchmarks: [Benchmark],
         p90Thresholds: [BenchmarkIdentifier:
-            [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]]
+            [BenchmarkMetric: BenchmarkThreshold]]
     ) -> BenchmarkResult.ThresholdDeviations {
         var allDeviationResults = BenchmarkResult.ThresholdDeviations()
 

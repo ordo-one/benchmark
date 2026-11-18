@@ -35,7 +35,7 @@ extension BenchmarkTool {
     static func makeBenchmarkThresholds(
         path: String,
         benchmarkIdentifier: BenchmarkIdentifier
-    ) -> [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold]? {
+    ) -> [BenchmarkMetric: BenchmarkThreshold]? {
         var path = FilePath(path)
         if path.isAbsolute {
             path.append("\(benchmarkIdentifier.target).\(benchmarkIdentifier.name).p90.json")
@@ -46,8 +46,23 @@ extension BenchmarkTool {
             path = cwdPath
         }
 
-        var p90Thresholds: [BenchmarkMetric: BenchmarkThresholds.AbsoluteThreshold] = [:]
-        var p90ThresholdsRaw: [String: BenchmarkThresholds.AbsoluteThreshold]?
+        return makeBenchmarkThresholds(path: path, benchmarkIdentifier: benchmarkIdentifier)
+    }
+
+    /// `makeBenchmarkThresholds` is a convenience function for reading p90 static thresholds that previously have been exported with `metricP90AbsoluteThresholds`
+    ///
+    /// - Parameters:
+    ///   - path: The path where the `Thresholds` directory should be located, containing static thresholds files using the naming pattern:
+    ///   `moduleName.benchmarkName.p90.json`
+    ///   - moduleName: The name of the benchmark module, can be extracted in the benchmark using:
+    ///   `String("\(#fileID)".prefix(while: { $0 != "/" }))`
+    ///   - benchmarkName: The name of the benchmark
+    /// - Returns: A dictionary with static benchmark thresholds per metric or nil if the file could not be found or read
+    static func makeBenchmarkThresholds(
+        path: FilePath,
+        benchmarkIdentifier: BenchmarkIdentifier
+    ) -> [BenchmarkMetric: BenchmarkThreshold]? {
+        var p90Thresholds: [BenchmarkMetric: BenchmarkThreshold] = [:]
 
         do {
             let fileDescriptor = try FileDescriptor.open(path, .readOnly, options: [], permissions: .ownerRead)
@@ -68,19 +83,11 @@ extension BenchmarkTool {
                             readBytes.append(contentsOf: nextBytes)
                         }
 
-                        p90ThresholdsRaw = try JSONDecoder()
+                        p90Thresholds = try JSONDecoder()
                             .decode(
-                                [String: BenchmarkThresholds.AbsoluteThreshold].self,
+                                [BenchmarkMetric: BenchmarkThreshold].self,
                                 from: Data(readBytes)
                             )
-
-                        if let p90ThresholdsRaw {
-                            p90ThresholdsRaw.forEach { metric, threshold in
-                                if let metric = BenchmarkMetric(argument: metric) {
-                                    p90Thresholds[metric] = threshold
-                                }
-                            }
-                        }
                     } catch {
                         print(
                             "Failed to read file at \(path) [\(String(reflecting: error))] \(Errno(rawValue: errno).description)"

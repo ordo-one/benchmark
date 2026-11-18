@@ -49,6 +49,51 @@ swift package --allow-writing-to-package-directory benchmark thresholds update
 swift package benchmark thresholds read
 ```
 
+### Relative and Range Static Thresholds
+
+By default, `thresholds update` stores each metric's p90 value as an absolute threshold value.
+Later runs must precisely match this value unless `Configuration.thresholds` tolerances are set in code.
+
+For metrics with high variance across different benchmark runs, you can instead declare a varying range of values to be expected via the threshold files:
+
+- A "relative" threshold which accepts p90 values within `tolerancePercentage` percent of `base`.
+- A "range" threshold which accepts p90 values from `min` to `max`, inclusive.
+
+A metric can have either or both, for example:
+
+```json
+{
+  "mallocCountTotal" : 1011,
+  "releaseCount" : {
+    "max" : 4739,
+    "min" : 4736
+  },
+  "syscalls" : {
+    "base" : 757,
+    "tolerancePercentage" : 0.27
+  }
+}
+```
+
+For metrics with relative or range thresholds, the tolerances set in `Configuration.thresholds` in code are ignored.
+A warning will be emitted if both are set simultaneously.
+
+To generate relative or range thresholds, add `--relative`, `--range` (or both) to `thresholds update` and use `--run-count`.
+The first run writes absolute thresholds, and each later run widens them to also cover its results if needed.
+
+```bash
+swift package --allow-writing-to-package-directory benchmark thresholds update --relative --range --run-count 10
+```
+
+`thresholds update <baseline>` with `--relative` or `--range` runs no benchmarks and just widens the thresholds already in the files to also cover the given baseline.
+
+When checking a stored baseline, building the benchmark targets only serves to load the `Configuration.thresholds` tolerances that are set in code.
+With relative or range thresholds you can use `--skip-loading-benchmark-targets` to skip that build since the thresholds will be stored in files anyway, not in code.
+
+```bash
+swift package benchmark thresholds check <baseline> --skip-loading-benchmark-targets
+```
+
 ### Return Codes from checking thresholds (dynamic comparison or static comparison)
 - 0: Check is exactly equal
 - 2: Regressions detected
