@@ -32,6 +32,7 @@ To check two previously stored baselines for deviations (taking tolerance thresh
 ```bash
 swift package benchmark baseline check main pull_request
 ```
+No benchmark runs during this check, so the tolerances used are the ones recorded with the second (checked) baseline, or the default tolerances for a metric that has none recorded.
 
 #### 2. Comparing a Test Run Against Static Thresholds
 To run all benchmarks and compare them against previously saved static thresholds (taking tolerance thresholds specified into the code into account):

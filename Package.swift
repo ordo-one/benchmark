@@ -205,5 +205,10 @@ let package = Package(
             dependencies: ["Benchmark"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "BenchmarkToolTests",
+            dependencies: ["Benchmark", "BenchmarkTool"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )

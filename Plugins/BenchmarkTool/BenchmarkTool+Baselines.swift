@@ -447,11 +447,15 @@ extension BenchmarkBaseline: Equatable {
                 if let rhsResults = rhs.results.first(where: { $0.key == lhsBenchmarkIdentifier }) {
                     if let rhsBenchmarkResult = rhsResults.value.first(where: { $0.metric == lhsBenchmarkResult.metric }
                     ) {
+                        // A check of two saved baselines builds no targets, so it has no benchmarks to ask; the
+                        // thresholds the checked baseline was recorded with apply then, as a live check would use.
+                        let recorded = benchmarks.isEmpty ? lhsBenchmarkResult.thresholds : nil
                         let thresholds = thresholdsForBenchmarks(
                             benchmarks,
                             name: lhsBenchmarkIdentifier.name,
                             target: lhsBenchmarkIdentifier.target,
-                            metric: lhsBenchmarkResult.metric
+                            metric: lhsBenchmarkResult.metric,
+                            defaultThresholds: recorded ?? BenchmarkThresholds.default
                         )
 
                         let deviationResults = lhsBenchmarkResult.deviationsComparedWith(
