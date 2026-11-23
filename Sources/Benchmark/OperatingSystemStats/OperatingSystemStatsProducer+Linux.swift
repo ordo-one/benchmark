@@ -20,7 +20,6 @@ import Musl
 import SystemPackage
 
 final class OperatingSystemStatsProducer {
-    var nsPerSchedulerTick: Int
     var pageSize: Int
 
     let lock = NIOLock()
@@ -40,9 +39,6 @@ final class OperatingSystemStatsProducer {
     }
 
     init() {
-        let schedulerTicksPerSecond = sysconf(Int32(_SC_CLK_TCK))
-
-        nsPerSchedulerTick = 1_000_000_000 / schedulerTicksPerSecond
         pageSize = sysconf(Int32(_SC_PAGESIZE))
     }
 
@@ -99,11 +95,14 @@ final class OperatingSystemStatsProducer {
 
         var stats: processStats = .init()
         CLinuxProcessStats(statsRead, &stats)
-        stats.cpuUser *= nsPerSchedulerTick
-        stats.cpuSystem *= nsPerSchedulerTick
-        stats.cpuTotal *= nsPerSchedulerTick
         stats.peakMemoryResident *= pageSize
 
+        return stats
+    }
+
+    func readCPUTimeStats() -> cpuTimeStats {
+        var stats: cpuTimeStats = .init()
+        CLinuxCPUTimeStats(&stats)
         return stats
     }
 
@@ -116,8 +115,19 @@ final class OperatingSystemStatsProducer {
             return .init()
         }
 
-        let ioStats = readIOStats()
-        let processStats = readProcessStats()
+        var ioStats: ioStats = .init()
+        var cpuTimeStats: cpuTimeStats = .init()
+
+        if metrics.contains(.readSyscalls) || metrics.contains(.writeSyscalls)
+            || metrics.contains(.readBytesLogical) || metrics.contains(.writeBytesLogical)
+            || metrics.contains(.readBytesPhysical) || metrics.contains(.writeBytesPhysical)
+        {
+            ioStats = readIOStats()
+        }
+
+        if metrics.contains(.cpuUser) || metrics.contains(.cpuSystem) || metrics.contains(.cpuTotal) {
+            cpuTimeStats = readCPUTimeStats()
+        }
 
         var threads = 0
         var threadsRunning = 0
@@ -136,9 +146,9 @@ final class OperatingSystemStatsProducer {
         }
 
         return OperatingSystemStats(
-            cpuUser: Int(processStats.cpuUser),
-            cpuSystem: Int(processStats.cpuSystem),
-            cpuTotal: Int(processStats.cpuTotal),
+            cpuUser: Int(cpuTimeStats.cpuUser),
+            cpuSystem: Int(cpuTimeStats.cpuSystem),
+            cpuTotal: Int(cpuTimeStats.cpuTotal),
             peakMemoryResident: peakResident,
             peakMemoryVirtual: peakVirtual,
             syscalls: 0,

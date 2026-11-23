@@ -23,15 +23,20 @@ struct ioStats {
 void CLinuxIOStats(const char *s, struct ioStats *ioStats);
 
 struct processStats {
-    long cpuUser;
-    long cpuSystem;
-    long cpuTotal;
     long threads;
     long peakMemoryVirtual;
     long peakMemoryResident;
 } processStats;
 
 void CLinuxProcessStats(const char *s, struct processStats *processStats);
+
+struct cpuTimeStats {
+    long long cpuUser;
+    long long cpuSystem;
+    long long cpuTotal;
+} cpuTimeStats;
+
+void CLinuxCPUTimeStats(struct cpuTimeStats *cpuTimeStats);
 
 struct performanceCounters {
     unsigned long long instructions;

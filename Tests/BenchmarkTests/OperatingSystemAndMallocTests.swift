@@ -49,6 +49,22 @@ final class OperatingSystemAndMallocTests: XCTestCase {
         )
     }
 
+    func testOperatingSystemStatsProducerCPUTimeResolution() throws {
+        let operatingSystemStatsProducer = OperatingSystemStatsProducer()
+        operatingSystemStatsProducer.configureMetrics([.cpuTotal])
+
+        let startCPUTotal = operatingSystemStatsProducer.makeOperatingSystemStats().cpuTotal
+        var stopCPUTotal = startCPUTotal
+        let deadline = ContinuousClock.now + .seconds(1)
+        while stopCPUTotal == startCPUTotal, ContinuousClock.now < deadline {
+            stopCPUTotal = operatingSystemStatsProducer.makeOperatingSystemStats().cpuTotal
+        }
+
+        let nsPerSchedulerTick = 1_000_000_000 / sysconf(Int32(_SC_CLK_TCK))
+        XCTAssertGreaterThan(stopCPUTotal, startCPUTotal)
+        XCTAssertLessThan(stopCPUTotal - startCPUTotal, nsPerSchedulerTick)
+    }
+
     func testOperatingSystemStatsProducerMetricSupported() throws {
         let operatingSystemStatsProducer = OperatingSystemStatsProducer()
         blackHole(operatingSystemStatsProducer.metricSupported(.throughput))
