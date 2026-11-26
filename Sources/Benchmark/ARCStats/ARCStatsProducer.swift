@@ -29,6 +29,8 @@ final class ARCStatsProducer {
         SwiftRuntimeInterposerSwift.unhook()
     }
 
+    static var refcountSwizzlingState: Int { -1 }
+
     static func reset() {
         SwiftRuntimeInterposerSwift.reset()
     }
@@ -71,6 +73,12 @@ final class ARCStatsProducer {
         swift_runtime_set_release_hook(nil, nil)
         swift_runtime_set_retain_hook(nil, nil)
         swift_runtime_set_alloc_object_hook(nil, nil)
+    }
+
+    /// 1 if the runtime dispatches retains and releases to the hooks, 0 if it
+    /// bypasses them, -1 if the runtime predates the gate and always dispatches.
+    static var refcountSwizzlingState: Int {
+        Int(swift_runtime_refcount_swizzling_state())
     }
 
     static func reset() {

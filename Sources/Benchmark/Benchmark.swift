@@ -10,7 +10,7 @@
 
 import Foundation
 
-// swiftlint:disable file_length identifier_name
+// swiftlint:disable file_length
 
 /// Defines a benchmark
 public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type_body_length
@@ -587,4 +587,4 @@ public struct ThreadSafeProperty<T> {
     }
 }
 
-// swiftlint:enable file_length identifier_name
+// swiftlint:enable file_length

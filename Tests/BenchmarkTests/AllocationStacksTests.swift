@@ -144,6 +144,8 @@ struct AllocationStacksTests {
     func trimCutsAtAsyncHarnessFrames() {
         let frames = [siteA, Frame(symbol: "closure #1 in closure #1 in Benchmark.runAsync()", isAsync: true), siteB]
         #expect(AllocationStackSymbolicator.trim(frames) == [siteA])
+        let awaited = [siteA, Frame(symbol: "(1) suspend resume partial function for Benchmark.runAwaitingClosure()", isAsync: true), siteB]
+        #expect(AllocationStackSymbolicator.trim(awaited) == [siteA])
     }
 
     @available(macOS 26, *)
