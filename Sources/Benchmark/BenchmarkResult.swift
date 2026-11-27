@@ -222,7 +222,7 @@ public extension BenchmarkScalingFactor {
 // swiftlint:disable type_body_length
 
 @_documentation(visibility: internal)
-public struct BenchmarkResult: Codable, Comparable, Equatable {
+public struct BenchmarkResult: Codable, Comparable, Equatable, Sendable {
     public init(
         metric: BenchmarkMetric,
         timeUnits: BenchmarkTimeUnits,

@@ -14,7 +14,9 @@ import Numerics
 
 // A type that provides distribution / percentile calculations of latency measurements
 @_documentation(visibility: internal)
-public final class Statistics: Codable {
+/// `@unchecked Sendable`: samples are added by the executor while it measures, and the
+/// finished statistics are only read afterwards, when they travel inside a ``BenchmarkResult``.
+public final class Statistics: Codable, @unchecked Sendable {
     public static let defaultMaximumMeasurement = 1_000_000_000 // 1 second in nanoseconds
     public static let defaultPercentilesToCalculate = [0.0, 25.0, 50.0, 75.0, 90.0, 99.0, 100.0]
     public static let defaultPercentilesToCalculateP90Index = 4

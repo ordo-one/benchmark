@@ -20,7 +20,10 @@ import Musl
 import SystemPackage
 import Synchronization
 
-final class OperatingSystemStatsProducer {
+/// `@unchecked Sendable`: what the sampling thread shares with the benchmark thread is in
+/// `sampling`, behind a `Mutex`. The other properties are set before sampling starts and only
+/// used by the benchmark thread.
+final class OperatingSystemStatsProducer: @unchecked Sendable {
     var nsPerSchedulerTick: Int
     var pageSize: Int
 
