@@ -4,4 +4,3 @@ disabled_rules:
   - prefer_self_in_static_references
 excluded:
   - Sources/Benchmark/Progress
-  - Sources/Benchmark/NIOConcurrencyHelpers

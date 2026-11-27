@@ -14,7 +14,7 @@ After having done those, running your benchmarks are as simple as running `swift
 
 ### Installing Prerequisites and Platform Support
 
-Benchmark requires Swift 5.7 support as it uses Regex and Duration types introduced with the `macOS 13` runtime, most versions of Linux will work as long as Swift 5.7+ is used. 
+Benchmark supports the three most recent Swift minor releases (currently 6.2, 6.3 and 6.4) and the three most recent Apple platform releases (currently macOS 15 and iOS 18 or later). It runs on most Linux distributions supported by those toolchains.
 
 On Swift 6.3+ Benchmark by default depends on and uses a custom malloc interposer (the [malloc-interposer](https://github.com/ordo-one/malloc-interposer) package) to capture memory allocation statistics. This is controlled via a Swift Package Manager trait named `MallocInterposer`, which is **enabled by default** and requires no system installation — it is fetched as a package dependency.
 

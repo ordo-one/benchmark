@@ -14,6 +14,7 @@ import MallocInterposerSwift
 // Weakly linked: Darwin only ships libswiftRuntime from macOS 15.
 @_weakLinked import Runtime
 import SwiftRuntimeHooks
+import Synchronization
 
 // swiftlint:disable prefer_self_in_static_references
 
@@ -30,8 +31,7 @@ import SwiftRuntimeHooks
 enum AllocationStackRecorder {
     /// Raw aggregated stacks for one thread, keyed by frame addresses.
     final class ThreadRecorder {
-        let lock = NIOLock()
-        var stacks: [[UInt]: RawStack] = [:]
+        let stacks = Mutex<[[UInt]: RawStack]>([:])
         // Only touched by the owning thread, so it lives outside the lock and keeps its capacity.
         var scratch: [UInt] = []
         /// Allocations made by the hook itself on this thread (count and bytes).
@@ -72,7 +72,7 @@ enum AllocationStackRecorder {
                 }
             }
 
-            lock.withLockVoid {
+            stacks.withLock { stacks in
                 if let index = stacks.index(forKey: scratch) {
                     stacks.values[index].count += 1
                     stacks.values[index].bytes += size
@@ -98,8 +98,8 @@ enum AllocationStackRecorder {
     static var maxDepth = 64
     /// The number of innermost frames belonging to the recorder itself, see ``calibrate()``.
     static var ownFrameCount = 0
-    static let registryLock = NIOLock()
-    static var recorders: [ThreadRecorder] = []
+    /// Every thread's recorder, appended on first use and never removed.
+    static let recorders = Mutex<[ThreadRecorder]>([])
     /// Nested allocations made while a thread was still creating its recorder.
     static let orphanNestedCount = ManagedAtomic<Int>(0)
     static let orphanNestedBytes = ManagedAtomic<Int>(0)
@@ -113,7 +113,8 @@ enum AllocationStackRecorder {
         self.maxDepth = maxDepth
         benchmark_allocation_hook_state_initialize()
         // Force the lazy globals the hook reads to initialize now, not inside malloc.
-        _ = (hook, registryLock, recorders, orphanNestedCount, orphanNestedBytes, asyncFrameMarker, inHookFlag)
+        _ = (hook, orphanNestedCount, orphanNestedBytes, asyncFrameMarker, inHookFlag)
+        recorders.withLock { _ in }
         calibrate()
         reset()
     }
@@ -155,9 +156,9 @@ enum AllocationStackRecorder {
     }
 
     private static func rawStackKeys() -> [[UInt]] {
-        registryLock.withLock {
+        recorders.withLock { recorders in
             recorders.flatMap { recorder in
-                recorder.lock.withLock { Array(recorder.stacks.keys) }
+                recorder.stacks.withLock { Array($0.keys) }
             }
         }
     }
@@ -173,11 +174,9 @@ enum AllocationStackRecorder {
 
     /// Clears all recorded stacks and nested-allocation tallies.
     static func reset() {
-        registryLock.withLockVoid {
+        recorders.withLock { recorders in
             for recorder in recorders {
-                recorder.lock.withLockVoid {
-                    recorder.stacks.removeAll()
-                }
+                recorder.stacks.withLock { $0.removeAll() }
                 recorder.nestedCount.store(0, ordering: .relaxed)
                 recorder.nestedBytes.store(0, ordering: .relaxed)
             }
@@ -190,28 +189,29 @@ enum AllocationStackRecorder {
     /// counted but which do not belong to the benchmark.
     ///
     /// Called inside the measured window, so it must not allocate itself even unoptimized. That's
-    /// why we use explicit lock/unlock and index loop instead of closures and iterators.
+    /// why we use an index loop instead of an iterator. `Mutex.withLock` is transparent and its
+    /// closure is non-escaping, so it doesn't allocate either.
     static func nestedAllocations() -> (count: Int, bytes: Int) {
-        registryLock.lock()
-        defer { registryLock.unlock() }
-        var count = orphanNestedCount.load(ordering: .relaxed)
-        var bytes = orphanNestedBytes.load(ordering: .relaxed)
-        var index = 0
-        while index < recorders.count {
-            count += recorders[index].nestedCount.load(ordering: .relaxed)
-            bytes += recorders[index].nestedBytes.load(ordering: .relaxed)
-            index += 1
+        recorders.withLock { recorders in
+            var count = orphanNestedCount.load(ordering: .relaxed)
+            var bytes = orphanNestedBytes.load(ordering: .relaxed)
+            var index = 0
+            while index < recorders.count {
+                count += recorders[index].nestedCount.load(ordering: .relaxed)
+                bytes += recorders[index].nestedBytes.load(ordering: .relaxed)
+                index += 1
+            }
+            return (count, bytes)
         }
-        return (count, bytes)
     }
 
     /// All recorded stacks merged across threads. Call after ``disable()``.
     static func snapshot() -> [RawStack] {
         var merged: [[UInt]: RawStack] = [:]
-        registryLock.withLockVoid {
+        recorders.withLock { recorders in
             for recorder in recorders {
-                recorder.lock.withLockVoid {
-                    for (key, entry) in recorder.stacks {
+                recorder.stacks.withLock { stacks in
+                    for (key, entry) in stacks {
                         if let index = merged.index(forKey: key) {
                             merged.values[index].count += entry.count
                             merged.values[index].bytes += entry.bytes
@@ -256,9 +256,7 @@ enum AllocationStackRecorder {
 
     private static func makeThreadRecorder() -> ThreadRecorder {
         let recorder = ThreadRecorder(maxDepth: maxDepth)
-        registryLock.withLockVoid {
-            recorders.append(recorder)
-        }
+        recorders.withLock { $0.append(recorder) }
         // Keep the guard set; the caller clears it once recording is done.
         benchmark_allocation_hook_state_set(UInt(bitPattern: Unmanaged.passUnretained(recorder).toOpaque()) | inHookFlag)
         return recorder
