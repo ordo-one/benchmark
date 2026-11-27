@@ -27,7 +27,7 @@
 //
 
 @_documentation(visibility: internal)
-public protocol ProgressElementType {
+public protocol ProgressElementType: Sendable {
     func value(_ progressBar: ProgressBar) -> String
 }
 

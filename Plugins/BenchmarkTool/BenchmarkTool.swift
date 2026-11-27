@@ -14,6 +14,7 @@ import ArgumentParser
 import Benchmark
 import BenchmarkShared
 import SystemPackage
+import Synchronization
 
 #if canImport(Darwin)
 import Darwin
@@ -42,7 +43,7 @@ extension BenchmarkMetric: ExpressibleByArgument {}
 
 typealias BenchmarkResults = [BenchmarkIdentifier: [BenchmarkResult]]
 
-private var failedBenchmarkRuns = 0
+private let failedBenchmarkRuns = Atomic(0)
 
 @main
 struct BenchmarkTool: AsyncParsableCommand {
@@ -204,7 +205,7 @@ struct BenchmarkTool: AsyncParsableCommand {
     }
 
     func printChildRunError(error: Int32, benchmarkExecutablePath: String) {
-        failedBenchmarkRuns += 1
+        failedBenchmarkRuns.add(1, ordering: .relaxed)
         print("Failed to run '\(command)' for \(benchmarkExecutablePath), error code [\(error)]")
         print("Likely your benchmark crashed, try running the tool in the debugger, e.g.")
         print("lldb \(benchmarkExecutablePath)")
@@ -415,7 +416,7 @@ struct BenchmarkTool: AsyncParsableCommand {
             try reportAllocationStacks()
         }
 
-        if failedBenchmarkRuns > 0 {
+        if failedBenchmarkRuns.load(ordering: .relaxed) > 0 {
             exitBenchmark(exitCode: .benchmarkJobFailed)
         }
     }

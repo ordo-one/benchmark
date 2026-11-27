@@ -47,9 +47,9 @@ final class ARCStatsProducer {
     typealias SwiftRuntimeHook = @convention(c) (UnsafeRawPointer?, UnsafeMutableRawPointer?) -> Void
     static let usesPreloadedInterposer = false
 
-    static var allocCount: UnsafeAtomic<Int> = .create(0)
-    static var retainCount: UnsafeAtomic<Int> = .create(0)
-    static var releaseCount: UnsafeAtomic<Int> = .create(0)
+    static let allocCount: UnsafeAtomic<Int> = .create(0)
+    static let retainCount: UnsafeAtomic<Int> = .create(0)
+    static let releaseCount: UnsafeAtomic<Int> = .create(0)
 
     static func hook() {
         let allocObjectHook: SwiftRuntimeHook = { _, _ in

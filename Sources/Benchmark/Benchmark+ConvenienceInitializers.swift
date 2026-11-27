@@ -13,7 +13,7 @@ public extension Benchmark {
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping (_ benchmark: Benchmark, SetupResult) -> Void,
-        setup: @escaping (() async throws -> SetupResult),
+        setup: @escaping @Sendable () async throws -> SetupResult,
         teardown: BenchmarkTeardownHook? = nil
     ) {
         self.init(name, configuration: configuration) { benchmark in
@@ -42,7 +42,7 @@ public extension Benchmark {
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping @isolated(any) (_ benchmark: Benchmark, SetupResult) async -> Void,
-        setup: @escaping (() async throws -> SetupResult),
+        setup: @escaping @Sendable () async throws -> SetupResult,
         teardown: BenchmarkTeardownHook? = nil
     ) {
         self.init(
@@ -77,7 +77,7 @@ public extension Benchmark {
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping (_ benchmark: Benchmark, SetupResult) throws -> Void,
-        setup: @escaping (() async throws -> SetupResult),
+        setup: @escaping @Sendable () async throws -> SetupResult,
         teardown: BenchmarkTeardownHook? = nil
     ) {
         self.init(
@@ -113,7 +113,7 @@ public extension Benchmark {
         _ name: String,
         configuration: Benchmark.Configuration = Benchmark.defaultConfiguration,
         closure: @escaping @isolated(any) (_ benchmark: Benchmark, SetupResult) async throws -> Void,
-        setup: @escaping (() async throws -> SetupResult),
+        setup: @escaping @Sendable () async throws -> SetupResult,
         teardown: BenchmarkTeardownHook? = nil
     ) {
         self.init(

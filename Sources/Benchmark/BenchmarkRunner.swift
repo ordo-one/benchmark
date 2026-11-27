@@ -45,7 +45,9 @@ public extension BenchmarkRunnerHooks {
 
 @_documentation(visibility: internal)
 public struct BenchmarkRunner: AsyncParsableCommand, BenchmarkRunnerReadWrite { // swiftlint:disable:this type_body_length
-    static var testReadWrite: BenchmarkRunnerReadWrite?
+    /// Test-only override of the host channel. Set by tests before `run()` and never written
+    /// concurrently, so it isn't locked.
+    nonisolated(unsafe) static var testReadWrite: BenchmarkRunnerReadWrite?
 
     public init() {}
 
