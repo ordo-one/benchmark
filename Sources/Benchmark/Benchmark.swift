@@ -14,7 +14,10 @@ import Synchronization
 // swiftlint:disable file_length
 
 /// Defines a benchmark
-public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type_body_length
+/// `@unchecked Sendable`: a benchmark is mutable, but it is only used by one task at a time.
+/// It is created during registration, then handed to the runner, which drives it on the body's
+/// isolation (``run(isolation:)``) with no concurrent access. The shared registry is behind a `Mutex`.
+public final class Benchmark: Codable, Hashable, @unchecked Sendable { // swiftlint:disable:this type_body_length
     @_documentation(visibility: internal)
     public typealias BenchmarkClosure = (_ benchmark: Benchmark) -> Void
     @_documentation(visibility: internal)
