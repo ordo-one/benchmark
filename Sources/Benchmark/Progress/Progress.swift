@@ -25,6 +25,8 @@
 //  SOFTWARE.
 //
 
+import Synchronization
+
 // MARK: - ProgressBarDisplayer
 
 @_documentation(visibility: internal)
@@ -61,9 +63,14 @@ public struct ProgressBar {
     public let count: Int
     let configuration: [ProgressElementType]?
 
-    public static var defaultConfiguration: [ProgressElementType] = [
+    private static let _defaultConfiguration = Mutex<[ProgressElementType]>([
         ProgressIndex(), ProgressBarLine(), ProgressTimeEstimates(),
-    ]
+    ])
+
+    public static var defaultConfiguration: [ProgressElementType] {
+        get { _defaultConfiguration.withLock { $0 } }
+        set { _defaultConfiguration.withLock { $0 = newValue } }
+    }
 
     var printer: ProgressBarPrinter
 

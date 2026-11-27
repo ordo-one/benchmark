@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import Synchronization
 
 // swiftlint:disable file_length
 
@@ -29,48 +30,65 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     /// Internal storage type for async benchmark bodies: runs on whatever isolation `run(isolation:)` is on.
     typealias BenchmarkAsyncBody = nonisolated(nonsending) (_ benchmark: Benchmark) async throws -> Void
 
-    /// Alias for closures used to hook into setup / teardown
-    public typealias BenchmarkSetupHook = () async throws -> Void
-    public typealias BenchmarkTeardownHook = () async throws -> Void
+    /// Alias for closures used to hook into setup / teardown.
+    ///
+    /// Hooks are registered on one thread and run on another, so they must be `@Sendable`.
+    public typealias BenchmarkSetupHook = @Sendable () async throws -> Void
+    public typealias BenchmarkTeardownHook = @Sendable () async throws -> Void
 
-    private static let setupTeardownLock = NSLock()
+    private struct Hooks {
+        var startup: BenchmarkSetupHook?
+        var shutdown: BenchmarkTeardownHook?
+        var setup: BenchmarkSetupHook?
+        var teardown: BenchmarkTeardownHook?
+    }
 
-    @_documentation(visibility: internal)
-    @ThreadSafeProperty(wrappedValue: nil, lock: setupTeardownLock)
-    public static var _startupHook: BenchmarkSetupHook? // Should be removed when going to 2.0, just kept for API compatiblity
-
-    @_documentation(visibility: internal)
-    @ThreadSafeProperty(wrappedValue: nil, lock: setupTeardownLock)
-    public static var _shutdownHook: BenchmarkTeardownHook? // Should be removed when going to 2.0, just kept for API compatiblity
-
-    @_documentation(visibility: internal)
-    @ThreadSafeProperty(wrappedValue: nil, lock: setupTeardownLock)
-    public static var _setup: BenchmarkSetupHook?
+    private static let hooks = Mutex(Hooks())
 
     @_documentation(visibility: internal)
-    @ThreadSafeProperty(wrappedValue: nil, lock: setupTeardownLock)
-    public static var _teardown: BenchmarkTeardownHook?
+    public static var _startupHook: BenchmarkSetupHook? { // Should be removed when going to 2.0, just kept for API compatiblity
+        get { hooks.withLock { $0.startup } }
+        set { hooks.withLock { $0.startup = newValue } }
+    }
 
     @_documentation(visibility: internal)
-    nonisolated(unsafe) public static var startupHook: BenchmarkSetupHook? {
+    public static var _shutdownHook: BenchmarkTeardownHook? { // Should be removed when going to 2.0, just kept for API compatiblity
+        get { hooks.withLock { $0.shutdown } }
+        set { hooks.withLock { $0.shutdown = newValue } }
+    }
+
+    @_documentation(visibility: internal)
+    public static var _setup: BenchmarkSetupHook? {
+        get { hooks.withLock { $0.setup } }
+        set { hooks.withLock { $0.setup = newValue } }
+    }
+
+    @_documentation(visibility: internal)
+    public static var _teardown: BenchmarkTeardownHook? {
+        get { hooks.withLock { $0.teardown } }
+        set { hooks.withLock { $0.teardown = newValue } }
+    }
+
+    @_documentation(visibility: internal)
+    public static var startupHook: BenchmarkSetupHook? {
         get { _startupHook }
         set { _startupHook = newValue }
     }
 
     @_documentation(visibility: internal)
-    nonisolated(unsafe) public static var shutdownHook: BenchmarkTeardownHook? {
+    public static var shutdownHook: BenchmarkTeardownHook? {
         get { _shutdownHook }
         set { _shutdownHook = newValue }
     }
 
     /// This closure if set, will be run before a targets benchmarks are run, but after they are registered
-    nonisolated(unsafe) public static var setup: BenchmarkSetupHook? {
+    public static var setup: BenchmarkSetupHook? {
         get { _setup }
         set { _setup = newValue }
     }
 
     /// This closure if set, will be run after a targets benchmarks run, but after they are registered
-    nonisolated(unsafe) public static var teardown: BenchmarkTeardownHook? {
+    public static var teardown: BenchmarkTeardownHook? {
         get { _teardown }
         set { _teardown = newValue }
     }
@@ -92,10 +110,21 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     // (e.g. from the `--check-absolute` command-line option) without tripping the
     // deprecation warning on the public `checkAbsoluteThresholds` API.
     @_documentation(visibility: internal)
-    static var _checkAbsoluteThresholds = false
+    static var _checkAbsoluteThresholds: Bool {
+        get { checkAbsoluteThresholdsStorage.load(ordering: .relaxed) }
+        set { checkAbsoluteThresholdsStorage.store(newValue, ordering: .relaxed) }
+    }
+
+    private static let checkAbsoluteThresholdsStorage = Atomic(false)
+
+    /// Bookkeeping of all registered benchmarks
+    static let registeredBenchmarks = Mutex<[Benchmark]>([])
 
     @_documentation(visibility: internal)
-    public static var benchmarks: [Benchmark] = [] // Bookkeeping of all registered benchmarks
+    public static var benchmarks: [Benchmark] {
+        get { registeredBenchmarks.withLock { $0 } }
+        set { registeredBenchmarks.withLock { $0 = newValue } }
+    }
 
     /// The name of the benchmark without any of the tags appended
     public var baseName: String
@@ -166,9 +195,8 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     public var configuration: Configuration = .init()
 
     /// Hook for setting defaults for a whole benchmark suite
-    private static let configurationLock = NSLock()
-    @ThreadSafeProperty(
-        wrappedValue: .init(
+    private static let _defaultConfiguration = Mutex<Configuration>(
+        .init(
             metrics: BenchmarkMetric.default,
             tags: [:],
             timeUnits: .automatic,
@@ -179,19 +207,21 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
             maxIterations: 10_000,
             skip: false,
             thresholds: nil
-        ),
-        lock: configurationLock
+        )
     )
-    private static var _defaultConfiguration: Configuration
 
-    nonisolated(unsafe)
-        public static var defaultConfiguration: Configuration
-    {
-        get { _defaultConfiguration }
-        set { _defaultConfiguration = newValue }
+    public static var defaultConfiguration: Configuration {
+        get { _defaultConfiguration.withLock { $0 } }
+        set { _defaultConfiguration.withLock { $0 = newValue } }
     }
 
-    static var testSkipBenchmarkRegistrations = false // true in test to avoid bench registration fail
+    /// True in tests to avoid benchmark registration failures.
+    static var testSkipBenchmarkRegistrations: Bool {
+        get { testSkipBenchmarkRegistrationsStorage.load(ordering: .relaxed) }
+        set { testSkipBenchmarkRegistrationsStorage.store(newValue, ordering: .relaxed) }
+    }
+
+    private static let testSkipBenchmarkRegistrationsStorage = Atomic(false)
     var measurementCompleted = false // Keep track so we skip multiple 'end of measurement'
 
     enum CodingKeys: String, CodingKey {
@@ -354,11 +384,16 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
     // Shared between sync/async actual benchmark registration
     func benchmarkRegistration() {
         if Self.testSkipBenchmarkRegistrations == false {
-            guard Self.benchmarks.contains(self) == false else {
+            let registered = Self.registeredBenchmarks.withLock { benchmarks in
+                guard benchmarks.contains(self) == false else {
+                    return false
+                }
+                benchmarks.append(self)
+                return true
+            }
+            guard registered else {
                 fatalError("Duplicate registration of benchmark '\(name)', name must be unique.")
             }
-
-            Self.benchmarks.append(self)
         }
 
         configuration.thresholds?
@@ -461,7 +496,7 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
 
 public extension Benchmark {
     /// The configuration settings for running a benchmark.
-    struct Configuration: Codable {
+    struct Configuration: Codable, Sendable {
         /// Defines the metrics that should be measured for the benchmark
         public var metrics: [BenchmarkMetric]
         /// Specifies the parameters used to define the benchmark.
@@ -563,6 +598,7 @@ public extension Benchmark {
 }
 
 // Wrapper for static properties for Swift 6 mode compatibility
+@available(*, deprecated, message: "Use Synchronization.Mutex instead")
 @propertyWrapper
 public struct ThreadSafeProperty<T> {
     private var value: T

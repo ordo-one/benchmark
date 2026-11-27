@@ -9,7 +9,7 @@
 //
 
 /// Definitions of benchmark thresholds per metric
-public struct BenchmarkThresholds: Codable {
+public struct BenchmarkThresholds: Codable, Sendable {
     public typealias RelativeThreshold = Double
     public typealias AbsoluteThreshold = Int
 

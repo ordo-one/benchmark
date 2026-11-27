@@ -12,7 +12,7 @@
 
 @_documentation(visibility: internal)
 public extension BenchmarkResult {
-    enum Percentile: Int, Codable {
+    enum Percentile: Int, Codable, Sendable {
         case p0 = 0
         case p25 = 1
         case p50 = 2
@@ -24,7 +24,7 @@ public extension BenchmarkResult {
 }
 
 /// Time units for cpu/wall clock time
-public enum BenchmarkTimeUnits: String, Codable, CustomStringConvertible, CaseIterable {
+public enum BenchmarkTimeUnits: String, Codable, CustomStringConvertible, CaseIterable, Sendable {
     case nanoseconds
     case microseconds
     case milliseconds
@@ -91,7 +91,7 @@ public enum BenchmarkTimeUnits: String, Codable, CustomStringConvertible, CaseIt
 }
 
 /// Units for countable metrics
-public enum BenchmarkUnits: Int, Codable, CustomStringConvertible, CaseIterable {
+public enum BenchmarkUnits: Int, Codable, CustomStringConvertible, CaseIterable, Sendable {
     case count = 1
     case kilo = 1_000
     case mega = 1_000_000
@@ -167,7 +167,7 @@ public extension BenchmarkTimeUnits {
 /// Typically used for very fast-running benchmarks.
 /// In those cases, the time to measure the benchmark can impact as much as the time to run the code being benchmarked.
 /// Use a scaling factor when running your short benchmarks to provide greater numerical stability to the results.
-public enum BenchmarkScalingFactor: Int, Codable {
+public enum BenchmarkScalingFactor: Int, Codable, Sendable {
     /// No scaling factor, the raw count of iterations.
     case one = 1 // e.g. nanoseconds, or count
     /// Scaling factor of 1e03.

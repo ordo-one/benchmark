@@ -21,11 +21,11 @@ import jemalloc
 final class MallocStatsProducer {
     // Basically just set up a number of cached MIB structures for
     // more efficient queries later of malloc statistics.
-    static var threadCacheMIB = setupMIB(name: "thread.tcache.flush")
-    static var epochMIB = setupMIB(name: "epoch")
-    static var totalAllocatedMIB: [size_t] = setupMIB(name: "stats.resident")
-    static var smallNRequestsMIB: [size_t] = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).small.nrequests")
-    static var largeNRequestsMIB: [size_t] = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).large.nrequests")
+    static let threadCacheMIB = setupMIB(name: "thread.tcache.flush")
+    static let epochMIB = setupMIB(name: "epoch")
+    static let totalAllocatedMIB: [size_t] = setupMIB(name: "stats.resident")
+    static let smallNRequestsMIB: [size_t] = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).small.nrequests")
+    static let largeNRequestsMIB: [size_t] = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).large.nrequests")
     //    var smallNMallocMIB = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).small.nmalloc")
     //    var largeNMallocMIB = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).large.nmalloc")
     //    var smallNDallocMIB = setupMIB(name: "stats.arenas.\(MALLCTL_ARENAS_ALL).small.ndalloc")

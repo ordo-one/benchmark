@@ -30,7 +30,10 @@ import Synchronization
 @available(macOS 26, *)
 enum AllocationStackRecorder {
     /// Raw aggregated stacks for one thread, keyed by frame addresses.
-    final class ThreadRecorder {
+    ///
+    /// `@unchecked Sendable`: `stacks` is behind a `Mutex`, the nested tallies are atomics, and
+    /// `scratch` is only touched by the thread that owns the recorder.
+    final class ThreadRecorder: @unchecked Sendable {
         let stacks = Mutex<[[UInt]: RawStack]>([:])
         // Only touched by the owning thread, so it lives outside the lock and keeps its capacity.
         var scratch: [UInt] = []
@@ -95,9 +98,11 @@ enum AllocationStackRecorder {
     // Low bit of the per-thread state word: set while this thread is inside the hook.
     static let inHookFlag: UInt = 1
 
-    static var maxDepth = 64
+    // `maxDepth` and `ownFrameCount` are written only by `configure(maxDepth:)` and `calibrate()`,
+    // before the hook is enabled, and read inside malloc. A lock there would cost every allocation.
+    nonisolated(unsafe) static var maxDepth = 64
     /// The number of innermost frames belonging to the recorder itself, see ``calibrate()``.
-    static var ownFrameCount = 0
+    nonisolated(unsafe) static var ownFrameCount = 0
     /// Every thread's recorder, appended on first use and never removed.
     static let recorders = Mutex<[ThreadRecorder]>([])
     /// Nested allocations made while a thread was still creating its recorder.
