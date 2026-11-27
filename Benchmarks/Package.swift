@@ -9,7 +9,7 @@ let disableJemalloc = ProcessInfo.processInfo.environment["BENCHMARK_DISABLE_JEM
 
 let package = Package(
     name: "Benchmarks",
-    platforms: [.macOS(.v15), .iOS(.v17)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
     dependencies: [
         .package(path: "../"),
         .package(url: "https://github.com/ordo-one/package-datetime", .upToNextMajor(from: "1.0.1")),

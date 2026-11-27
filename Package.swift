@@ -96,8 +96,8 @@ benchmarkDependencies += [
 let package = Package(
     name: "Benchmark",
     platforms: [
-        .macOS(.v13),
-        .iOS(.v16),
+        .macOS(.v15),
+        .iOS(.v18),
     ],
     products: [
         .plugin(name: "BenchmarkCommandPlugin", targets: ["BenchmarkCommandPlugin"]),

@@ -13,19 +13,15 @@
 import CDarwinOperatingSystemStats
 import Darwin
 import Dispatch
+import Synchronization
 
 final class OperatingSystemStatsProducer {
     var nsPerMachTick: Double
     var nsPerSchedulerTick: Int
 
-    let lock = NIOLock()
     let semaphore = DispatchSemaphore(value: 0)
-    var peakThreads: Int = 0
-    var peakThreadsRunning: Int = 0
-    var peakMemoryResident: Int = 0
-    var peakMemoryVirtual: Int = 0
-    var runState: RunState = .running
-    var sampleRate: Int = 10_000
+    /// Written by the sampling thread, read by the benchmark thread.
+    let sampling = Mutex(SamplingState())
     var metrics: Set<BenchmarkMetric>?
     var pid = getpid()
 
@@ -33,6 +29,15 @@ final class OperatingSystemStatsProducer {
         case running
         case shuttingDown
         case done
+    }
+
+    struct SamplingState {
+        var peakThreads: Int = 0
+        var peakThreadsRunning: Int = 0
+        var peakMemoryResident: Int = 0
+        var peakMemoryVirtual: Int = 0
+        var runState: RunState = .running
+        var sampleRate: Int = 10_000
     }
 
     internal
@@ -100,44 +105,43 @@ final class OperatingSystemStatsProducer {
 
         DispatchQueue.global(qos: .userInitiated)
             .async {
-                self.lock.lock()
-                let rate = self.sampleRate
-                self.peakThreads = 0
-                self.peakThreadsRunning = 0
-                self.peakMemoryResident = 0
-                self.peakMemoryVirtual = 0
-
-                self.runState = .running
+                let rate = self.sampling.withLock { state in
+                    state.peakThreads = 0
+                    state.peakThreadsRunning = 0
+                    state.peakMemoryResident = 0
+                    state.peakMemoryVirtual = 0
+                    state.runState = .running
+                    return state.sampleRate
+                }
                 var firstEventSampled = false
-                self.lock.unlock()
 
                 while true {
                     let procTaskInfo = self.getProcInfo()
 
-                    self.lock.lock()
-                    if procTaskInfo.pti_threadnum > self.peakThreads {
-                        self.peakThreads = Int(procTaskInfo.pti_threadnum)
-                    }
+                    let quit = self.sampling.withLock { state in
+                        if procTaskInfo.pti_threadnum > state.peakThreads {
+                            state.peakThreads = Int(procTaskInfo.pti_threadnum)
+                        }
 
-                    if procTaskInfo.pti_numrunning > self.peakThreadsRunning {
-                        self.peakThreadsRunning = Int(procTaskInfo.pti_numrunning)
-                    }
+                        if procTaskInfo.pti_numrunning > state.peakThreadsRunning {
+                            state.peakThreadsRunning = Int(procTaskInfo.pti_numrunning)
+                        }
 
-                    if procTaskInfo.pti_resident_size > self.peakMemoryResident {
-                        self.peakMemoryResident = Int(procTaskInfo.pti_resident_size)
-                    }
+                        if procTaskInfo.pti_resident_size > state.peakMemoryResident {
+                            state.peakMemoryResident = Int(procTaskInfo.pti_resident_size)
+                        }
 
-                    if procTaskInfo.pti_virtual_size > self.peakMemoryVirtual {
-                        self.peakMemoryVirtual = Int(procTaskInfo.pti_virtual_size)
-                    }
+                        if procTaskInfo.pti_virtual_size > state.peakMemoryVirtual {
+                            state.peakMemoryVirtual = Int(procTaskInfo.pti_virtual_size)
+                        }
 
-                    if self.runState == .shuttingDown {
-                        self.runState = .done
-                        self.semaphore.signal()
-                    }
+                        if state.runState == .shuttingDown {
+                            state.runState = .done
+                            self.semaphore.signal()
+                        }
 
-                    let quit = self.runState
-                    self.lock.unlock()
+                        return state.runState
+                    }
 
                     if firstEventSampled == false { // allow calling thread to continue when we have captured a sample
                         firstEventSampled = true
@@ -159,8 +163,8 @@ final class OperatingSystemStatsProducer {
 
     func stopSampling() {
         #if os(macOS)
-        lock.withLock {
-            runState = .shuttingDown
+        sampling.withLock { state in
+            state.runState = .shuttingDown
         }
         semaphore.wait()
         #endif
@@ -188,12 +192,11 @@ final class OperatingSystemStatsProducer {
         if metrics.contains(.threads) || metrics.contains(.threadsRunning) || metrics.contains(.peakMemoryResident)
             || metrics.contains(.peakMemoryResidentDelta) || metrics.contains(.peakMemoryVirtual)
         {
-            lock.lock()
-            threads = peakThreads
-            threadsRunning = peakThreadsRunning
-            peakResident = peakMemoryResident
-            peakVirtual = peakMemoryVirtual
-            lock.unlock()
+            let state = sampling.withLock { $0 }
+            threads = state.peakThreads
+            threadsRunning = state.peakThreadsRunning
+            peakResident = state.peakMemoryResident
+            peakVirtual = state.peakMemoryVirtual
         }
 
         var usage = rusage_info_current()
