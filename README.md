@@ -222,12 +222,19 @@ swift package benchmark run \
 
 See [Finding Allocation Sites](Sources/Benchmark/Documentation.docc/AllocationStacks.md) for report examples and more details.
 
-## Swift 6 support
-The package supports Swift 6.0 benchmark targets as well as Swift 5.10 targets (for Swift 5.9 support, need to use version 1.28.0 exactly).
+## Supported Swift versions
+The package supports the three most recent Swift minor releases, currently Swift 6.2, 6.3 and 6.4 (`Package.swift` serves 6.3 and later, `Package@swift-6.2.swift` serves 6.2). Older toolchains are not supported: pin version 1.38.0 for Swift 5.10 through 6.1, and version 1.28.0 for Swift 5.9.
 
-For Swift 6 targets, use the following signature for the benchmarks closure:
+For benchmark targets in Swift 6 language mode, use the following signature for the benchmarks closure:
 ```swift
 let benchmarks : @Sendable () -> Void = {
+```
+
+An `async` benchmark closure can declare the actor it needs to run on, and the measurement loop then runs on that actor (write `async in` if the body has no `await`, so the asynchronous form is selected):
+```swift
+Benchmark("Main actor work") { @MainActor benchmark async in
+    // runs on the main actor, no per-iteration hop
+}
 ```
 
 ## Output

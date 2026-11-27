@@ -411,9 +411,21 @@ let benchmarks = {
 
 The framework supports both synchronous and asynchronous benchmark closures, it should transparently "just work".
 
+An asynchronous closure can declare the actor it needs to run on. The measurement loop then runs on that actor, so the closure body executes there without a per-iteration hop, and the main thread is never blocked by the framework:
+
+```swift
+Benchmark("Main actor work") { @MainActor benchmark async in
+    for _ in benchmark.scaledIterations {
+        blackHole(viewModel.recompute())
+    }
+}
+```
+
+The closure must be `async` for the actor annotation to take effect: a closure body without any `await` is inferred as synchronous, and synchronous closures carry no isolation (the compiler then reports that converting the closure "loses global actor"). Writing `async in` in the closure signature, as above, selects the asynchronous form even when the body never suspends. This also holds for the initializers that take a `setup` closure returning a value: the isolation declared on the benchmark closure is preserved. An async closure without an actor annotation runs on the global concurrent executor and may itself hop to the main actor (for example with `MainActor.run`).
+
 ### Notes on threading
 
-The benchmark framework will use a couple of threads internally (one for sampling various statistics during the benchmark runtime, such as e.g. number of threads, another to facilitate async closures), so it is normal to see two extra threads or so when measuring - the sampling thread is currently running every 5ms and should not have measurable impact on most tests.
+The benchmark framework will use a couple of threads internally (one for sampling various statistics during the benchmark runtime, such as e.g. number of threads), so it is normal to see an extra thread or so when measuring - the sampling thread is currently running every 5ms and should not have measurable impact on most tests.
 
 ### Debugging
 
@@ -425,4 +437,4 @@ The Benchmark SwiftPM plugins executes the `BenchmarkTool` executable which is t
 
 The `BenchmarkTool` in turns runs each executable target that is defined and uses JSON to communicate with the target process over pipes.
 
-The executable benchmark targets just implements the actual benchmark tests, as much boilerplate code as possible has been hidden. The executable benchmark must depend on the `Benchmark` library target which also will pull in the malloc backend for malloc stats — the `malloc-interposer` package (`MallocInterposer` trait) on Swift 6.3+, or `jemalloc` (`Jemalloc` trait) on Swift 6.2 and 5.x, both enabled by default. See <doc:GettingStarted> for how to disable it if needed.
+The executable benchmark targets just implements the actual benchmark tests, as much boilerplate code as possible has been hidden. The executable benchmark must depend on the `Benchmark` library target which also will pull in the malloc backend for malloc stats — the `malloc-interposer` package (`MallocInterposer` trait) on Swift 6.3+, or `jemalloc` (`Jemalloc` trait) on Swift 6.2, both enabled by default. See <doc:GettingStarted> for how to disable it if needed.
