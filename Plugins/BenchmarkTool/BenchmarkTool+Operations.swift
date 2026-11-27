@@ -95,7 +95,7 @@ extension BenchmarkTool {
     mutating func postProcessBenchmarkResults() throws {
 
         // Turn on buffering again for output
-        setvbuf(stdout, nil, _IOFBF, Int(BUFSIZ))
+        enableStandardOutputBuffering()
 
         switch command {
         case .`init`:

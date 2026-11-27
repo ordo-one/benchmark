@@ -404,7 +404,7 @@ extension BenchmarkTool {
 
                             var resultPercentiles = ScaledResults.Percentiles()
                             var basePercentiles = ScaledResults.Percentiles()
-                            let adjustmentFunction: (Int) -> Int = displayScaled ? frame.scale : frame.normalize
+                            let adjustmentFunction: (Int) -> Int = { displayScaled ? frame.scale($0) : frame.normalize($0) }
                             let samples = result.statistics.measurementCount - base.statistics.measurementCount
 
                             basePercentiles.p0 = adjustmentFunction(percentilesBase[0])

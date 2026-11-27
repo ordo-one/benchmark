@@ -19,9 +19,9 @@ import Synchronization
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
-import Glibc
+@preconcurrency import Glibc // stdout and stderr are mutable C globals
 #elseif canImport(Musl)
-import Musl
+@preconcurrency import Musl
 #else
 #error("Unsupported Platform")
 #endif
@@ -44,6 +44,14 @@ extension BenchmarkMetric: ExpressibleByArgument {}
 typealias BenchmarkResults = [BenchmarkIdentifier: [BenchmarkResult]]
 
 private let failedBenchmarkRuns = Atomic(0)
+
+/// Turns full buffering of stdout back on.
+///
+/// Kept in this file because it doesn't import Foundation. Foundation re-exports Glibc without
+/// `@preconcurrency`, and then referencing `stdout` is an error in Swift 6 mode.
+func enableStandardOutputBuffering() {
+    setvbuf(stdout, nil, _IOFBF, Int(BUFSIZ))
+}
 
 @main
 struct BenchmarkTool: AsyncParsableCommand {
