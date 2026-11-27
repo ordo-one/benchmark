@@ -223,7 +223,7 @@ swift package benchmark run \
 See [Finding Allocation Sites](Sources/Benchmark/Documentation.docc/AllocationStacks.md) for report examples and more details.
 
 ## Supported Swift versions
-The package supports the three most recent Swift minor releases, currently Swift 6.2, 6.3 and 6.4 (`Package.swift` serves 6.3 and later, `Package@swift-6.2.swift` serves 6.2). Older toolchains are not supported: pin version 1.38.0 for Swift 5.10 through 6.1, and version 1.28.0 for Swift 5.9. On Apple platforms it supports the three most recent major releases, currently macOS 15 and iOS 18 or later.
+The package supports the three most recent Swift minor releases, currently Swift 6.2, 6.3 and 6.4 (`Package.swift` serves 6.3 and later, `Package@swift-6.2.swift` serves 6.2). Older toolchains are not supported: pin version 1.38.0 for Swift 5.10 through 6.1, and version 1.28.0 for Swift 5.9. On Apple platforms it supports the three most recent major releases, currently macOS 15 and iOS 18 or later. The package itself builds in the Swift 6 language mode.
 
 For benchmark targets in Swift 6 language mode, use the following signature for the benchmarks closure:
 ```swift

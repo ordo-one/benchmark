@@ -20,9 +20,9 @@ import SwiftRuntimeInterposerSwift
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
-import Glibc
+@preconcurrency import Glibc // stdout and stderr are mutable C globals
 #elseif canImport(Musl)
-import Musl
+@preconcurrency import Musl
 #else
 #error("Unsupported Platform")
 #endif

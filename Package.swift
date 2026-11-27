@@ -116,8 +116,7 @@ let package = Package(
     targets: [
         .target(
             name: "Benchmark",
-            dependencies: benchmarkDependencies,
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: benchmarkDependencies
         ),
         // Plugins used by users of the package
 
@@ -156,8 +155,7 @@ let package = Package(
                 "Benchmark",
                 "BenchmarkShared",
             ],
-            path: "Plugins/BenchmarkTool",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            path: "Plugins/BenchmarkTool"
         ),
 
         // Tool that generates the boilerplate
@@ -202,13 +200,11 @@ let package = Package(
 
         .testTarget(
             name: "BenchmarkTests",
-            dependencies: ["Benchmark"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["Benchmark"]
         ),
         .testTarget(
             name: "BenchmarkToolTests",
-            dependencies: ["Benchmark", "BenchmarkTool"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            dependencies: ["Benchmark", "BenchmarkTool"]
         ),
     ]
 )
